@@ -12,43 +12,49 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Passo 1: Baixar o código fonte do repositório
+      # 1. Baixar o código do repositório
       - name: Baixar código do repositório
         uses: actions/checkout@v4
 
-      # Passo 2: Configurar o ambiente Node.js
+      # 2. Configurar o ambiente Node.js
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      # Passo 3: Configurar o Java 17 para compilação Android
+      # 3. Configurar o Java 17 para compilação Android
       - name: Configurar Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      # Passo 4: Instalar as dependências do Capacitor
-      - name: Instalar Dependências Node
-        run: npm install
+      # 4. Instalar as dependências e a ferramenta de Ícones
+      - name: Instalar Dependências e Gerador de Ícones
+        run: |
+          npm install
+          npm install -g @capacitor/assets
 
-      # Passo 5: Gerar projeto Android e injetar permissões de Microfone
-      - name: Gerar Projeto Android Nativo e Configurar Permissões
+      # 5. Gerar projeto Android, Injetar Permissão de Microfone e Gerar Ícones
+      - name: Configurar Projeto Nativo
         run: |
           mkdir -p www
           npx cap add android
-          # Adiciona permissões de Gravação e Configuração de Áudio no AndroidManifest.xml
+          # Permissão de Microfone
           sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.RECORD_AUDIO" \/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" \/>' android/app/src/main/AndroidManifest.xml
+          # Gerar os ícones do App se a imagem icon.png existir
+          if [ -f "icon.png" ]; then
+            npx capacitor-assets generate --android
+          fi
 
-      # Passo 6: Compilar o APK no modo Debug usando o Gradle
+      # 6. Compilar o APK
       - name: Compilar APK Android
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      # Passo 7: Disponibilizar o arquivo APK final para download
+      # 7. Disponibilizar o APK para Download
       - name: Disponibilizar APK para Download
         uses: actions/upload-artifact@v4
         with:
