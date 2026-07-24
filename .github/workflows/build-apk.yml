@@ -12,42 +12,44 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Baixar o código do repositório
-      - name: Checkout do Repositório
-        uses: actions/checkout@v3
+      # Passo 1: Baixar o código fonte do repositório
+      - name: Baixar código do repositório
+        uses: actions/checkout@v4
 
-      # 2. Configurar o ambiente Node.js
+      # Passo 2: Configurar o ambiente Node.js
       - name: Configurar Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      # 3. Configurar Java para compilar o APK Android
+      # Passo 3: Configurar o Java 17 para compilação Android
       - name: Configurar Java 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      # 4. Instalar as dependências do Capacitor
-      - name: Instalar Dependências
+      # Passo 4: Instalar as dependências do Capacitor
+      - name: Instalar Dependências Node
         run: npm install
 
-      # 5. Adicionar a plataforma Android
-      - name: Inicializar Projeto Android
+      # Passo 5: Gerar projeto Android e injetar permissões de Microfone
+      - name: Gerar Projeto Android Nativo e Configurar Permissões
         run: |
           mkdir -p www
           npx cap add android
+          # Adiciona permissões de Gravação e Configuração de Áudio no AndroidManifest.xml
+          sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.RECORD_AUDIO" \/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" \/>' android/app/src/main/AndroidManifest.xml
 
-      # 6. Compilar o arquivo APK usando Gradle
-      - name: Gerar APK
+      # Passo 6: Compilar o APK no modo Debug usando o Gradle
+      - name: Compilar APK Android
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      # 7. Disponibilizar o APK gerado para Download
-      - name: Enviar APK como Artefato
+      # Passo 7: Disponibilizar o arquivo APK final para download
+      - name: Disponibilizar APK para Download
         uses: actions/upload-artifact@v4
         with:
           name: Agendamento LB
