@@ -1,0 +1,13 @@
+{
+  "appId": "com.barbearia.lucasborges",
+  "appName": "Agendamentos LB",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "server": {
+    "url": "https://SEU-SISTEMA-DJANGO.com/interno/",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}
