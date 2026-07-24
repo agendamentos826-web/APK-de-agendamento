@@ -8,9 +8,7 @@
     "cleartext": true,
     "allowNavigation": [
       "agendamento-interno-lucas-borges.onrender.com",
-      "*.onrender.com",
-      "*.googleapis.com",
-      "*.gstatic.com"
+      "*.onrender.com"
     ]
   },
   "android": {
