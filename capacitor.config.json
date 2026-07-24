@@ -5,9 +5,17 @@
   "bundledWebRuntime": false,
   "server": {
     "url": "https://agendamento-interno-lucas-borges.onrender.com/",
-    "cleartext": true
+    "cleartext": true,
+    "allowNavigation": [
+      "agendamento-interno-lucas-borges.onrender.com",
+      "*.onrender.com",
+      "*.googleapis.com",
+      "*.gstatic.com"
+    ]
   },
   "android": {
-    "allowMixedContent": true
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true
   }
 }
