@@ -1,10 +1,10 @@
 {
   "name": "app-barbearia-lucas-borges",
   "version": "1.0.0",
-  "description": "App de Agendamento Barbearia Lucas Borges",
+  "description": "Aplicativo Android para o Sistema de Agendamentos da Barbearia Lucas Borges",
   "main": "index.js",
   "scripts": {
-    "build": "echo 'Sem etapa de build estática'"
+    "build": "echo 'Sem etapa de compilação estática local'"
   },
   "dependencies": {
     "@capacitor/android": "^5.0.0",
