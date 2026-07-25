@@ -3,6 +3,7 @@
   "appName": "Agendamentos LB",
   "webDir": "www",
   "bundledWebRuntime": false,
+  "backgroundColor": "#f4f7f6",
   "server": {
     "url": "https://agendamento-interno-lucas-borges.onrender.com/",
     "cleartext": true,
