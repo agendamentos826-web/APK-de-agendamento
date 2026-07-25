@@ -6,6 +6,7 @@
   "server": {
     "url": "https://agendamento-interno-lucas-borges.onrender.com/",
     "cleartext": true,
+    "androidScheme": "https",
     "allowNavigation": [
       "agendamento-interno-lucas-borges.onrender.com",
       "*.onrender.com"
