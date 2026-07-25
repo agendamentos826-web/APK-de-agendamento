@@ -15,30 +15,36 @@ public class MainActivity extends BridgeActivity {
         WebView webView = this.bridge.getWebView();
 
         // =================================================================
-        // 1. DESATIVA O MODO ESCURO FORÇADO (ANDROID 10, 11 E 12)
+        // 1. BLINDAGEM DO SEU DATA-THEME (Impede o Android de estragar suas cores)
         // =================================================================
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            // Desativa modo escuro forçado no Android 10 a 12
             webView.getSettings().setForceDark(WebSettings.FORCE_DARK_OFF);
         }
 
-        // =================================================================
-        // 2. DESATIVA O ESCURECIMENTO ALGORÍTMICO (ANDROID 13 OU SUPERIOR)
-        // =================================================================
         try {
-            WebSettings.class.getMethod("setAlgorithmicDarkeningAllowed", boolean.class)
-                    .invoke(webView.getSettings(), false);
-        } catch (Exception ignored) {
-            // Executado em versões do Android onde o método não existe
+            // Desativa o escurecimento algorítmico no Android 13+ (Tiramisu)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                WebSettings.class.getMethod("setAlgorithmicDarkeningAllowed", boolean.class)
+                        .invoke(webView.getSettings(), false);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
 
         // =================================================================
-        // 3. AUTORIZAÇÃO E MANUTENÇÃO CONTÍNUA DO MICROFONE NO WEBVIEW
+        // 2. CORREÇÃO DO MICROFONE (Permissão contínua)
         // =================================================================
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onPermissionRequest(final PermissionRequest request) {
-                // Concede acesso contínuo aos recursos de áudio solicitados pelo HTML/JS
-                runOnUiThread(() -> request.grant(request.getResources()));
+                runOnUiThread(() -> {
+                    try {
+                        request.grant(request.getResources());
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                });
             }
         });
     }
