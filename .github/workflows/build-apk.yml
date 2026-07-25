@@ -22,32 +22,34 @@ jobs:
         with:
           node-version: 18
 
-      # 3. Configurar o Java 17 para compilação Android
+      # 3. Configurar Java 17 para compilação Android
       - name: Configurar Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      # 4. Instalar as dependências e a ferramenta de Ícones
-      - name: Instalar Dependências e Gerador de Ícones
+      # 4. Instalar dependências e gerador de assets
+      - name: Instalar Dependências e Ferramenta de Ícones
         run: |
           npm install
           npm install -g @capacitor/assets
 
-      # 5. Gerar projeto Android, Injetar Permissão de Microfone e Gerar Ícones
-      - name: Configurar Projeto Nativo
+      # 5. Inicializar projeto Android e Injetar Permissões
+      - name: Configurar Projeto Nativo e Ícones
         run: |
           mkdir -p www
           npx cap add android
-          # Permissão de Microfone
-          sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.RECORD_AUDIO" \/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" \/>' android/app/src/main/AndroidManifest.xml
-          # Gerar os ícones do App se a imagem icon.png existir
-          if [ -f "icon.png" ]; then
+
+          # Injeta permissões de Áudio e Serviço de Segundo Plano no AndroidManifest.xml
+          sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.RECORD_AUDIO" \/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" \/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" \/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" \/>' android/app/src/main/AndroidManifest.xml
+
+          # Verifica se a imagem existe na pasta assets/ e gera os ícones do App
+          if [ -f "assets/icon.png" ]; then
             npx capacitor-assets generate --android
           fi
 
-      # 6. Compilar o APK
+      # 6. Compilar o APK Android
       - name: Compilar APK Android
         run: |
           cd android
