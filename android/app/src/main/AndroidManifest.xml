@@ -3,10 +3,14 @@
     package="com.barbearialucasborges.app">
 
     <!-- PERMISSÕES NATIVAS DO ANDROID -->
-    <!-- Libera o uso contínuo do microfone no aplicativo -->
+    <!-- Permite gravação e ajuste de parâmetros de áudio -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.INTERNET" />
+    
+    <!-- Impede que o sistema desligue o processador de áudio em segundo plano -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
         android:allowBackup="true"
@@ -22,6 +26,7 @@
             android:label="Barbearia Lucas Borges"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
+            android:hardwareAccelerated="true"
             android:exported="true">
 
             <intent-filter>
