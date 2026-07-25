@@ -1,4 +1,4 @@
-name: Gerar APK Android via Capacitor
+name: Gerar APK Android via Capacitor - Barbearia
 
 on:
   push:
@@ -9,60 +9,82 @@ on:
 
 jobs:
   build:
+    name: Compilar APK Android
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Baixar o código do repositório
+      # 1. Descarrega o código do repositório para o servidor do GitHub
       - name: Baixar código do repositório
         uses: actions/checkout@v4
 
-      # 2. Configurar o ambiente Node.js
-      - name: Configurar Node.js
+      # 2. Configura a versão do Node.js
+      - name: Configurar Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
 
-      # 3. Configurar Java 17 para compilação Android
+      # 3. Configurar Java JDK 17 (Necessário para a compilação do Android)
       - name: Configurar Java 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
+          distribution: 'temurin'
           java-version: '17'
 
-      # 4. Instalar dependências e gerador de ícones
-      - name: Instalar Dependências e Ferramenta de Ícones
+      # 4. Instala as dependências do projeto e o gerador de ícones
+      - name: Instalar Dependências
         run: |
           npm install
           npm install -g @capacitor/assets
 
-      # 5. Criar projeto nativo, injetar permissões e FORÇAR LIMPEZA DE CACHE
-      - name: Configurar Projeto Nativo e Limpeza de Cache
+      # 5. Configuração Nativa, Permissões, Fix do Tema e Limpeza de Cache
+      - name: Configurar Projeto Nativo e Ajustes de Código
         run: |
           mkdir -p www
-          npx cap add android
 
-          # Permissões de Microfone e Segundo Plano
-          sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.RECORD_AUDIO" \/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" \/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" \/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" \/>' android/app/src/main/AndroidManifest.xml
-
-          # Injeta comando Java para o WebView LIMPAR O CACHE ao iniciar
-          MAIN_ACTIVITY="android/app/src/main/java/com/barbearia/lucasborges/MainActivity.java"
-          sed -i '/this.init(savedInstanceState, new ArrayList<Class<? extends Plugin>>() {{/a \    this.bridge.getWebView().clearCache(true);' $MAIN_ACTIVITY || true
-
-          # Gerar ícones se a imagem existir
-          if [ -f "assets/icon.png" ]; then
-            npx capacitor-assets generate --android
+          # Se a pasta android não existir, cria-a
+          if [ ! -d "android" ]; then
+            npx cap add android
           fi
 
-      # 6. Compilar o APK
+          # Sincroniza os arquivos web com o projeto nativo
+          npx cap sync android
+
+          # Permissões do Microfone e Serviços de Segundo Plano no AndroidManifest.xml
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          if [ -f "$MANIFEST" ]; then
+            if ! grep -q "RECORD_AUDIO" "$MANIFEST"; then
+              sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.RECORD_AUDIO" \/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" \/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" \/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" \/>' "$MANIFEST"
+            fi
+          fi
+
+          # Localiza dinamicamente o ficheiro MainActivity.java
+          MAIN_ACTIVITY=$(find android/app/src/main/java -name "MainActivity.java")
+
+          if [ -f "$MAIN_ACTIVITY" ]; then
+            # Importa a biblioteca de configurações Web se ainda não estiver importada
+            grep -q "android.webkit.WebSettings" "$MAIN_ACTIVITY" || sed -i '/import com.getcapacitor.BridgeActivity;/i import android.webkit.WebSettings;' "$MAIN_ACTIVITY"
+
+            # Injeta a Limpeza de Cache E Desativa o Tema Escuro Forçado do Android
+            if ! grep -q "clearCache" "$MAIN_ACTIVITY"; then
+              sed -i '/super.onCreate(savedInstanceState);/a \        this.bridge.getWebView().clearCache(true);\n        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) { this.bridge.getWebView().getSettings().setForceDark(WebSettings.FORCE_DARK_OFF); }' "$MAIN_ACTIVITY"
+            fi
+          fi
+
+          # Gera ícones nativos caso o ficheiro icon.png exista
+          if [ -f "assets/icon.png" ]; then
+            npx capacitor-assets generate --android || true
+          fi
+
+      # 6. Compila o APK no ambiente Android
       - name: Compilar APK Android
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      # 7. Disponibilizar o APK para Download
+      # 7. Disponibiliza o APK gerado para Download na aba Actions
       - name: Disponibilizar APK para Download
         uses: actions/upload-artifact@v4
         with:
-          name: Agendamento LB
+          name: Agendamento-LB-Debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
