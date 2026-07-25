@@ -29,27 +29,31 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      # 4. Instalar dependências e gerador de assets
+      # 4. Instalar dependências e gerador de ícones
       - name: Instalar Dependências e Ferramenta de Ícones
         run: |
           npm install
           npm install -g @capacitor/assets
 
-      # 5. Inicializar projeto Android e Injetar Permissões
-      - name: Configurar Projeto Nativo e Ícones
+      # 5. Criar projeto nativo, injetar permissões e FORÇAR LIMPEZA DE CACHE
+      - name: Configurar Projeto Nativo e Limpeza de Cache
         run: |
           mkdir -p www
           npx cap add android
 
-          # Injeta permissões de Áudio e Serviço de Segundo Plano no AndroidManifest.xml
+          # Permissões de Microfone e Segundo Plano
           sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.RECORD_AUDIO" \/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" \/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" \/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" \/>' android/app/src/main/AndroidManifest.xml
 
-          # Verifica se a imagem existe na pasta assets/ e gera os ícones do App
+          # Injeta comando Java para o WebView LIMPAR O CACHE ao iniciar
+          MAIN_ACTIVITY="android/app/src/main/java/com/barbearia/lucasborges/MainActivity.java"
+          sed -i '/this.init(savedInstanceState, new ArrayList<Class<? extends Plugin>>() {{/a \    this.bridge.getWebView().clearCache(true);' $MAIN_ACTIVITY || true
+
+          # Gerar ícones se a imagem existir
           if [ -f "assets/icon.png" ]; then
             npx capacitor-assets generate --android
           fi
 
-      # 6. Compilar o APK Android
+      # 6. Compilar o APK
       - name: Compilar APK Android
         run: |
           cd android
