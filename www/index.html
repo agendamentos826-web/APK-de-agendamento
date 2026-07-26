@@ -369,7 +369,7 @@
         <!-- INDICADOR VISUAL DO ASSISTENTE DE VOZ -->
         <!-- INDICADOR VISUAL DO ASSISTENTE DE VOZ DINDÂMICO -->
         <div id="indicador-voz" class="indicador-pronto">
-            🎙️ Toque para ativar. Depois diga: "Agendar [Nome]"
+            🎙️ Toque para ativar o Assistente de Voz
         </div>
       
     </div>
@@ -550,7 +550,6 @@
                 <div id="modalErrorMsg" class="modal-alert"></div>
 
                 <form id="formFinal">
-                    {% csrf_token %}
                     <input type="hidden" id="inputHora" name="horario">
                     <input type="hidden" id="inputBarbeiro" name="barbeiro">
                     
@@ -564,28 +563,59 @@
                         <label>Serviço (Opcional)</label>
                         <div class="custom-select-wrapper" id="custom-select-wrapper">
                             <select id="servicoCliente" name="servico" class="native-select-hidden">
-                                <option value="Interno" selected>Interno</option>
-                                {% for servico in servicos %}
-                                    <option value="{{ servico }}">{{ servico }}</option>
-                                {% endfor %}
-                                <option value="Pezinho">Pezinho (Serviço Rápido)</option>
+                                <option value="Interno (Padrão)" selected>Interno (Padrão)</option>
+                                <option value="Tradicional">Tradicional</option>
+                                <option value="Social">Social</option>
+                                <option value="Degradê">Degradê</option>
+                                <option value="Pezinho">Pezinho</option>
+                                <option value="Navalhado">Navalhado</option>
+                                <option value="Barba">Barba</option>
+                                <option value="Consultoria de Visagismo">Consultoria de Visagismo</option>
+                                <option value="Abordagem de Visagismo">Abordagem de Visagismo</option>
                             </select>
 
                             <div class="custom-select-trigger">
                                 <span id="select-text" class="selected-text">Interno (Padrão)</span>
                                 <i class="fas fa-chevron-down arrow"></i>
                             </div>
+                            <!-- Menu de Opções Personalizado de Serviços -->
                             <div class="custom-options">
-                                <div class="custom-option selected" data-value="Interno">
+                                <div class="custom-option selected" data-value="Interno (Padrão)">
                                     <span>Interno (Padrão)</span>
                                     <i class="fas fa-check check-icon"></i> 
                                 </div>
-                                {% for servico in servicos %}
-                                    <div class="custom-option" data-value="{{ servico }}">
-                                        <span>{{ servico }}</span>
-                                        <i class="fas fa-check check-icon"></i> 
-                                    </div>
-                                {% endfor %}
+                                <div class="custom-option" data-value="Tradicional">
+                                    <span>Tradicional</span>
+                                    <i class="fas fa-check check-icon"></i> 
+                                </div>
+                                <div class="custom-option" data-value="Social">
+                                    <span>Social</span>
+                                    <i class="fas fa-check check-icon"></i> 
+                                </div>
+                                <div class="custom-option" data-value="Degradê">
+                                    <span>Degradê</span>
+                                    <i class="fas fa-check check-icon"></i> 
+                                </div>
+                                <div class="custom-option" data-value="Pezinho">
+                                    <span>Pezinho</span>
+                                    <i class="fas fa-check check-icon"></i> 
+                                </div>
+                                <div class="custom-option" data-value="Navalhado">
+                                    <span>Navalhado</span>
+                                    <i class="fas fa-check check-icon"></i> 
+                                </div>
+                                <div class="custom-option" data-value="Barba">
+                                    <span>Barba</span>
+                                    <i class="fas fa-check check-icon"></i> 
+                                </div>
+                                <div class="custom-option" data-value="Consultoria de Visagismo">
+                                    <span>Consultoria de Visagismo</span>
+                                    <i class="fas fa-check check-icon"></i> 
+                                </div>
+                                <div class="custom-option" data-value="Abordagem de Visagismo">
+                                    <span>Abordagem de Visagismo</span>
+                                    <i class="fas fa-check check-icon"></i> 
+                                </div>
                             </div>
                         </div>
 
@@ -1387,8 +1417,8 @@
             });
         }
 
-                // ==============================================================================
-        // ASSISTENTE DE VOZ INTELIGENTE + GESTÃO DE SEGUNDO PLANO (PAGE VISIBILITY API)
+        // ==============================================================================
+        // ASSISTENTE DE VOZ INTELIGENTE + GESTÃO DE SEGUNDO PLANO (ESTILO ALEXA)
         // ==============================================================================
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -1399,18 +1429,37 @@
             reconhecimento.interimResults = false;
 
             let modoEscutaAtivo = false;
-            let microfonePausadoPeloSistema = false; // Guarda se o app foi minimizado enquanto ouvia
+            let microfonePausadoPeloSistema = false; // Guarda se o app foi minimizado
+            let estaFalando = false; // Impede que o microfone escute a própria voz do assistente
+
+            let aguardandoWakeWord = true;
+            const variacoesNey = ['ney', 'nei', 'nay', 'nej', 'né', 'ne'];
+            
             let dadosVoz = { nome: '', horario: '', barbeiro: '', data: '' };
 
-            // 1. Fala do Sintetizador de Voz (com taxa de velocidade levemente acelerada)
+            // 1. Fala do Sintetizador de Voz (TTS)
             function falar(texto, callbackAoTerminar) {
+                estaFalando = true; // Avisa o sistema que o assistente está falando
                 try { reconhecimento.stop(); } catch (e) {}
+
+                window.speechSynthesis.cancel(); // Limpa falas anteriores que possam estar pendentes
 
                 const mensagem = new SpeechSynthesisUtterance(texto);
                 mensagem.lang = 'pt-BR';
-                mensagem.rate = 1.08; // Fala ligeiramente mais rápida para agilizar
+                mensagem.rate = 1.08;
 
                 mensagem.onend = () => {
+                    estaFalando = false;
+                    if (modoEscutaAtivo && callbackAoTerminar) {
+                        // Pequena pausa (300ms) para garantir que a caixa de som silenciou antes de abrir o mic
+                        setTimeout(() => {
+                            callbackAoTerminar();
+                        }, 300);
+                    }
+                };
+
+                mensagem.onerror = () => {
+                    estaFalando = false;
                     if (modoEscutaAtivo && callbackAoTerminar) {
                         callbackAoTerminar();
                     }
@@ -1432,60 +1481,62 @@
             // 3. Reseta os dados armazenados
             function resetarDados() {
                 dadosVoz = { nome: '', horario: '', barbeiro: '', data: '' };
+                aguardandoWakeWord = true; // Volta a aguardar a palavra "Ney"
             }
 
-            // 4. Liga/Desliga o assistente manualmente
-            function alternarEscutaVoz() {
+            // 4. Liga/Desliga o assistente manualmente ao clicar no botão
+            async function alternarEscutaVoz() {
                 if (modoEscutaAtivo) {
                     modoEscutaAtivo = false;
                     microfonePausadoPeloSistema = false;
+                    estaFalando = false;
                     window.speechSynthesis.cancel();
                     try { reconhecimento.stop(); } catch (e) {}
                     
                     resetarDados();
-                    atualizarIndicador("🎙️ Toque para ativar. Fale direto ou passo a passo.", "pronto");
-                    mostrarMensagem("Assistente pausado.", "erro");
+                    atualizarIndicador("🎙️ Toque para ativar. Diga 'Ney' para chamar.", "pronto");
+                    if (typeof mostrarMensagem === 'function') {
+                        mostrarMensagem("Assistente pausado.", "erro");
+                    }
                 } else {
                     modoEscutaAtivo = true;
                     microfonePausadoPeloSistema = false;
                     resetarDados();
-                    atualizarIndicador("👂 Ouvindo... Ex: 'Agendar Marcos às 14h com Lucas'", "ouvindo");
+
+                    // Pede permissão de áudio UMA ÚNICA VEZ ao clicar no botão de ativar
+                    try {
+                        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                            const streamAudio = await navigator.mediaDevices.getUserMedia({ audio: true });
+                            streamAudio.getTracks().forEach(track => track.stop());
+                        }
+                    } catch (erro) {
+                        console.error("Permissão de microfone negada:", erro);
+                        modoEscutaAtivo = false;
+                        atualizarIndicador("⚠️ Permissão de microfone negada.", "pronto");
+                        return;
+                    }
+
+                    atualizarIndicador("👂 Aguardando você dizer 'Ney'...", "ouvindo");
                     iniciarCapturaMic();
                 }
             }
 
+            // 5. Inicia a escuta do microfone sem solicitar permissão repetidamente
             function iniciarCapturaMic() {
-                if (!modoEscutaAtivo) return;
+                if (!modoEscutaAtivo || estaFalando) return;
+
                 try {
                     reconhecimento.start();
-                } catch (e) {}
-            }
-
-            // ==========================================================================
-            // 5. DETEÇÃO DE SEGUNDO PLANO (APP MINIMIZADO / REABERTO)
-            // ==========================================================================
-            document.addEventListener("visibilitychange", () => {
-                if (document.hidden) {
-                    // Se o app foi minimizado e o assistente estava ligado
-                    if (modoEscutaAtivo) {
-                        microfonePausadoPeloSistema = true; // Marca que foi pausado sozinho pelo app
-                        try { reconhecimento.stop(); } catch (e) {}
-                        console.log("App em segundo plano: Microfone pausado para economizar bateria.");
-                    }
-                } else {
-                    // Quando o usuário volta para o app em primeiro plano
-                    if (modoEscutaAtivo && microfonePausadoPeloSistema) {
-                        microfonePausadoPeloSistema = false;
-                        atualizarIndicador("👂 Ouvindo de volta... Pode falar!", "ouvindo");
-                        iniciarCapturaMic(); // Reativa o microfone automaticamente
-                        console.log("App em primeiro plano: Microfone reativado com sucesso!");
+                    console.log("📱 Microfone ativo e escutando no Android...");
+                } catch (erro) {
+                    // No Android, se o microfone já estiver ativo, ignoramos o erro 'InvalidStateError'
+                    if (erro.name !== 'InvalidStateError') {
+                        console.error("Erro ao iniciar microfone no Android:", erro);
                     }
                 }
-            });
+            }
 
-            // ==========================================================================
-            // 6. LISTAS DE VARIAÇÕES E NORMALIZAÇÃO DE NOMES DE BARBEIROS
-            // ==========================================================================
+            // 6. Normalização de texto
             function normalizarTexto(texto) {
                 return texto
                     .toLowerCase()
@@ -1496,14 +1547,11 @@
             const variacoesAluizio = ['aluizio', 'aluisio', 'aloizio', 'aloisio', 'luizio', 'luis', 'luiz'];
             const variacoesLucas = ['lucas', 'luca', 'borges'];
 
-            // ==========================================================================
-            // 7. MOTOR DE EXTRAÇÃO INTELIGENTE DE INFORMAÇÕES
-            // ==========================================================================
+            // 7. Motor de Extração de Informações
             function extrairInformacoes(textoDito) {
                 const textoOriginal = textoDito.toLowerCase().trim();
                 const textoSemAcento = normalizarTexto(textoDito);
 
-                // A. Identifica o Barbeiro através das variações fonéticas
                 if (!dadosVoz.barbeiro) {
                     const eAluizio = variacoesAluizio.some(v => textoSemAcento.includes(v));
                     const eLucas = variacoesLucas.some(v => textoSemAcento.includes(v));
@@ -1515,7 +1563,6 @@
                     }
                 }
 
-                // B. Identifica o Horário (padrões: "14:30", "14 e 30", "14h", "14 horas", "8:30")
                 if (!dadosVoz.horario) {
                     const regexHora = /(\b\d{1,2}\b)\s*(:|e|horas|hora|h)?\s*(\b\d{2}\b)?/;
                     const match = textoOriginal.match(regexHora);
@@ -1530,7 +1577,6 @@
                     }
                 }
 
-                // C. Extrai o Nome do Cliente
                 if (!dadosVoz.nome && textoOriginal.includes("agendar")) {
                     let depoisDeAgendar = textoOriginal.split("agendar")[1] || "";
                     
@@ -1557,9 +1603,7 @@
                 }
             }
 
-            // ==========================================================================
-            // 8. DECISÃO E DIRECIONAMENTO DO FLUXO
-            // ==========================================================================
+            // 8. Decisão e Direcionamento do Fluxo
             function avaliarEAvancar() {
                 if (!dadosVoz.nome) {
                     falar("Qual é o nome do cliente?", () => iniciarCapturaMic());
@@ -1579,71 +1623,125 @@
                 executarAgendamentoFinal();
             }
 
-            // ==========================================================================
-            // 9. ENVIO PARA O BACKEND E CONFIRMAÇÃO
-            // ==========================================================================
+            // 9. Processamento da Voz Capturada (Evento Principal)
+            // Evento acionado sempre que o navegador captura algum som de voz
+            reconhecimento.onresult = (evento) => {
+                // Captura a transcrição do áudio
+                const textoDito = evento.results[evento.results.length - 1][0].transcript.trim();
+                
+                // LOG DE TESTE: Exibe no console exatamente o que o microfone ouviu
+                console.log("🟢 [TESTE DE VOZ] O microfone escutou:", textoDito);
+
+                const textoNormalizado = normalizarTexto(textoDito);
+
+                // FASE 1: Verifica se a palavra de ativação "Ney" foi dita
+                if (aguardandoWakeWord) {
+                    const falouNey = variacoesNey.some(v => textoNormalizado.includes(v));
+
+                    if (falouNey) {
+                        console.log("🎯 Palavra 'Ney' detectada com sucesso!");
+                        aguardandoWakeWord = false;
+
+                        let comandoSemNey = textoNormalizado;
+                        variacoesNey.forEach(v => {
+                            comandoSemNey = comandoSemNey.replace(v, '').trim();
+                        });
+
+                        if (comandoSemNey.length < 3) {
+                            atualizarIndicador("👂 Ney ouvindo... Pode falar!", "ouvindo");
+                            falar("Pois não? Como posso ajudar?", () => {
+                                iniciarCapturaMic();
+                            });
+                        } else {
+                            atualizarIndicador("👂 Processando...", "ouvindo");
+                            extrairInformacoes(textoDito);
+                            avaliarEAvancar();
+                        }
+                    } else {
+                        console.log("⏳ Áudio recebido, mas a palavra 'Ney' não foi identificada.");
+                    }
+                    return;
+                }
+
+                // FASE 2: Processamento após ativação
+                extrairInformacoes(textoDito);
+                avaliarEAvancar();
+            };
+
+            // 10. Envio ao Backend e Finalização
             function executarAgendamentoFinal() {
-                dadosVoz.data = document.getElementById('dataSelecionada').value;
+                const elemData = document.getElementById('dataSelecionada');
+                if (elemData) {
+                    dadosVoz.data = elemData.value;
+                }
 
                 falar(`Agendando ${dadosVoz.nome} às ${dadosVoz.horario} com ${dadosVoz.barbeiro}. Aguarde...`);
 
-                // Dentro da função executarAgendamentoFinal:
                 fetch(`${API_BASE}/api/agendamento-voz-webhook/`, {
                     method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(dadosVoz)
                 })
                 .then(r => r.json())
                 .then(res => {
                     if (res.sucesso || res.status === 'sucesso') {
-                        falar(res.resposta_voz || "Agendado com sucesso!", () => {
-                            encerrarAssistente();
-                        });
+                        falar(res.resposta_voz || "Agendado com sucesso!", () => encerrarAssistente());
                     } else {
-                        falar("Não consegui agendar. " + (res.mensagem || "Verifique o horário."), () => {
-                            encerrarAssistente();
-                        });
+                        falar("Não consegui agendar. " + (res.mensagem || "Verifique o horário."), () => encerrarAssistente());
                     }
                 })
                 .catch(err => {
                     console.error("Erro na requisição:", err);
-                    falar("Ocorreu um erro de conexão com o servidor.", () => {
-                        encerrarAssistente();
-                    });
+                    falar("Ocorreu um erro de conexão com o servidor.", () => encerrarAssistente());
                 });
             }
-
-            // Processa a voz capturada
-            reconhecimento.onresult = (evento) => {
-                const textoDito = evento.results[evento.results.length - 1][0].transcript.trim();
-                console.log("Voz capturada:", textoDito);
-
-                extrairInformacoes(textoDito);
-                avaliarEAvancar();
-            };
 
             function encerrarAssistente() {
                 modoEscutaAtivo = false;
                 microfonePausadoPeloSistema = false;
+                estaFalando = false;
                 resetarDados();
-                atualizarIndicador("🎙️ Toque para ativar. Fale direto ou passo a passo.", "pronto");
-                buscarOcupados(); 
+                atualizarIndicador("🎙️ Toque para ativar o Assistente de Voz", "pronto");
+                if (typeof buscarOcupados === 'function') {
+                    buscarOcupados();
+                }
             }
 
+            // 11. Eventos do Microfone e Segundo Plano
             reconhecimento.onend = () => {
-                // Só reinicia automaticamente se não tiver sido pausado porque o app foi minimizado
-                if (modoEscutaAtivo && !microfonePausadoPeloSistema && !window.speechSynthesis.speaking) {
-                    iniciarCapturaMic();
+                if (modoEscutaAtivo && !microfonePausadoPeloSistema && !estaFalando) {
+                    // Um pequeno delay de 200ms evita que o Android bloqueie restart rápido de áudio
+                    setTimeout(() => {
+                        iniciarCapturaMic();
+                    }, 200);
                 }
             };
 
             reconhecimento.onerror = (e) => {
-                if (e.error === 'no-speech' && modoEscutaAtivo && !microfonePausadoPeloSistema) {
-                    iniciarCapturaMic();
+                console.warn("Aviso do reconhecimento de voz no Android:", e.error);
+
+                // Erros de ausência de fala ('no-speech') ou problemas de conexão temporária ('network')
+                if ((e.error === 'no-speech' || e.error === 'network') && modoEscutaAtivo && !microfonePausadoPeloSistema && !estaFalando) {
+                    setTimeout(() => {
+                        iniciarCapturaMic();
+                    }, 300);
                 }
             };
+
+            document.addEventListener("visibilitychange", () => {
+                if (document.hidden) {
+                    if (modoEscutaAtivo) {
+                        microfonePausadoPeloSistema = true;
+                        try { reconhecimento.stop(); } catch (e) {}
+                    }
+                } else {
+                    if (modoEscutaAtivo && microfonePausadoPeloSistema) {
+                        microfonePausadoPeloSistema = false;
+                        atualizarIndicador("👂 Ouvindo de volta... Diga 'Ney'!", "ouvindo");
+                        iniciarCapturaMic();
+                    }
+                }
+            });
 
             const elemIndicador = document.getElementById("indicador-voz");
             if (elemIndicador) {

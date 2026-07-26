@@ -4,6 +4,7 @@
 
     <!-- PERMISSÕES NATIVAS DO ANDROID -->
     <!-- Permite gravação e ajuste de parâmetros de áudio -->
+    <!-- INÍCIO: Permissões de Áudio e Microfone -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.INTERNET" />
