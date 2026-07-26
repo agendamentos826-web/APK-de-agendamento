@@ -1882,6 +1882,46 @@
             attributeFilter: ['data-theme']
             });
         });
+
+        // ==========================================
+        // CONTROLE DE SEGUNDO PLANO (BACKGROUND)
+        // ==========================================
+        document.addEventListener("visibilitychange", () => {
+            const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
+
+            if (document.hidden) {
+                // O APP FOI MINIMIZADO OU A TELA DESLIGOU
+                if (modoEscutaAtivo) {
+                    console.log("App minimizado. Pausando microfone...");
+                    // Anotamos que foi o sistema que pausou, não o usuário
+                    microfonePausadoPeloSistema = true; 
+                    
+                    // Desligamos a variável para matar aquele nosso loop infinito
+                    modoEscutaAtivo = false; 
+                    
+                    // Forçamos o microfone a parar de vez
+                    if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
+                        window.Capacitor.Plugins.SpeechRecognition.stop();
+                    } else {
+                        try { reconhecimento.stop(); } catch(e){}
+                    }
+                    
+                    atualizarIndicador("⏸️ App em segundo plano. Mic pausado.", "pronto");
+                }
+            } else {
+                // O APP VOLTOU PARA A TELA (PRIMEIRO PLANO)
+                // Se o microfone estava ligado antes de minimizar, nós ligamos de novo!
+                if (microfonePausadoPeloSistema) {
+                    console.log("App voltou! Reativando microfone...");
+                    
+                    // Resetamos a variável
+                    microfonePausadoPeloSistema = false;
+                    
+                    // Como modoEscutaAtivo agora é false, chamar essa função vai LIGAR o mic
+                    alternarEscutaVoz(); 
+                }
+            }
+        });
    </script> 
 </body>
 </html>
