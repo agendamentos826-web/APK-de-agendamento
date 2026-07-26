@@ -1486,12 +1486,11 @@
 
             // 4. Liga/Desliga o assistente manualmente ao clicar no botão
             async function alternarEscutaVoz() {
-                // 1. Verifica se estamos rodando nativamente no celular via Capacitor
                 const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
 
+                // 1. DESLIGANDO O MICROFONE (Quando você clica para parar)
                 if (modoEscutaAtivo) {
-                    // ... SEU CÓDIGO ATUAL DE DESLIGAR O MICROFONE ...
-                    modoEscutaAtivo = false;
+                    modoEscutaAtivo = false; // Isso é o que quebra o "loop infinito" do microfone
                     microfonePausadoPeloSistema = false;
                     estaFalando = false;
                     window.speechSynthesis.cancel();
@@ -1503,55 +1502,82 @@
                     }
                     
                     resetarDados();
-                    atualizarIndicador("🎙️ Toque para ativar. Diga 'Ney' para chamar.", "pronto");
-                    return;
+                    atualizarIndicador("🎙️ Toque para ativar o Assistente", "pronto");
+                    return; // Encerra a função aqui
                 } 
 
-                // ATIVANDO O MICROFONE
+                // 2. ATIVANDO O MICROFONE
                 modoEscutaAtivo = true;
                 microfonePausadoPeloSistema = false;
                 resetarDados();
-                atualizarIndicador("👂 Iniciando microfone...", "ouvindo");
-
+                
                 if (isNativo) {
                     // ==========================================
-                    // LÓGICA PARA O APK ANDROID (CAPACITOR PLUGIN)
+                    // MODO CELULAR (APK NATIVO) - ESCUTA CONTÍNUA
                     // ==========================================
                     const { SpeechRecognition } = window.Capacitor.Plugins;
                     
+                    // Mantemos a exigência do "Ney" porque o mic ficará ouvindo a conversa da barbearia
+                    aguardandoWakeWord = true; 
+                    
                     try {
-                        // Chama a "caixinha" nativa do Android pedindo permissão
                         const hasPermission = await SpeechRecognition.checkPermissions();
                         if (hasPermission.speechRecognition !== 'granted') {
                             await SpeechRecognition.requestPermissions();
                         }
 
-                        // Inicia o reconhecimento de voz nativo
-                        await SpeechRecognition.start({
-                            language: "pt-BR",
-                            partialResults: true,
-                            popup: false // Define false para não abrir a janela do Google gigante na tela
-                        });
+                        atualizarIndicador("👂 Ouvindo sem parar... Diga 'Ney' (Toque para desativar)", "ouvindo");
+                        await SpeechRecognition.removeAllListeners();
 
-                        // Escuta os resultados nativos e repassa para a sua função existente
+                        // Configura o que fazer quando captar alguma fala no ambiente
                         SpeechRecognition.addListener("partialResults", (data) => {
                             if(data.matches && data.matches.length > 0) {
                                 const textoDitoNativo = data.matches[0];
-                                // Chama a sua função de extração que já está pronta!
-                                extrairInformacoes(textoDitoNativo);
-                                avaliarEAvancar();
+                                // Só processamos se o assistente não estiver falando naquele momento
+                                if (!estaFalando) {
+                                    extrairInformacoes(textoDitoNativo);
+                                    avaliarEAvancar();
+                                }
                             }
                         });
 
-                    } catch (erro) {
-                        console.error("Erro no SpeechRecognition nativo:", erro);
+                        // O TRUQUE: Função que fica se chamando repetidamente (Loop)
+                        const manterMicrofoneAberto = async () => {
+                            // Trava de segurança: se você clicou no botão para desligar, o loop morre aqui
+                            if (!modoEscutaAtivo) return; 
+
+                            try {
+                                await SpeechRecognition.start({
+                                    language: "pt-BR",
+                                    partialResults: true,
+                                    popup: false
+                                });
+                                
+                                // Se o Android fechar a escuta (ex: acabou de processar uma fala), 
+                                // damos uma micropausa de 200ms e reabrimos o microfone!
+                                if (modoEscutaAtivo) {
+                                    setTimeout(manterMicrofoneAberto, 200);
+                                }
+                            } catch (erro) {
+                                // Se o erro for o "timeout por silêncio", simplesmente ignoramos e reabrimos!
+                                if (modoEscutaAtivo) {
+                                    setTimeout(manterMicrofoneAberto, 200);
+                                }
+                            }
+                        };
+
+                        // Dá o "pontapé inicial" no nosso loop infinito
+                        manterMicrofoneAberto();
+
+                    } catch (erroFatal) {
+                        console.error("Erro no SpeechRecognition nativo:", erroFatal);
                         modoEscutaAtivo = false;
                         atualizarIndicador("⚠️ Erro no mic nativo.", "pronto");
                     }
                     
                 } else {
                     // ==========================================
-                    // LÓGICA ORIGINAL PARA NAVEGADOR WEB (SEU CÓDIGO)
+                    // MODO NAVEGADOR WEB (COMPUTADOR)
                     // ==========================================
                     try {
                         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
@@ -1566,9 +1592,10 @@
                     }
 
                     atualizarIndicador("👂 Aguardando você dizer 'Ney'...", "ouvindo");
-                    iniciarCapturaMic(); // Função que você já criou com webkitSpeechRecognition
+                    iniciarCapturaMic(); 
                 }
             }
+
 
             // 5. Inicia a escuta do microfone sem solicitar permissão repetidamente
             function iniciarCapturaMic() {
