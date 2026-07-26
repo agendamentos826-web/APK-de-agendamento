@@ -1,4 +1,3 @@
-{% load static %}
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -628,6 +627,8 @@
     </div>
 
     <script>
+        // 🌐 ENDEREÇO OFICIAL DO BACKEND NO RENDER
+        const API_BASE = 'https://agendamento-interno-lucas-borges.onrender.com';
         // --- VARIÁVEIS GLOBAIS ---
         let mapaOcupacao = {};
         let configDia = { domingo_liberado: false };
@@ -763,12 +764,12 @@
                 };
         
                 // Envia para o Backend (mesmo código de antes...)
-                fetch('/api/salvar/', { 
+                // Dentro da função setupFormSubmit:
+                fetch(`${API_BASE}/api/salvar/`, { 
                     method: 'POST',
                     body: JSON.stringify(data),
                     headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': '{{ csrf_token }}'
+                        'Content-Type': 'application/json'
                     }
                 })
                 .then(response => response.json())
@@ -868,16 +869,15 @@
         // --- BUSCA DADOS ---
         function buscarOcupados() {
             const data = document.getElementById('dataSelecionada').value;
-            if(!data) return;
+            if (!data) return;
 
-            fetch(`/api/ocupados/?data=${data}`)
+            fetch(`${API_BASE}/api/ocupados/?data=${data}`)
                 .then(r => {
                     if (!r.ok) throw new Error("Erro na resposta da API");
                     return r.json();
                 })
                 .then(d => {
                     if(d.erro) {
-                        console.error("Erro Backend:", d.erro);
                         mostrarMensagem("Erro interno no servidor", "erro");
                         return;
                     }
@@ -953,16 +953,13 @@
                 `Deseja bloquear o horário das ${hora} (${barbeiro})?`, 
                 "#c0392b", // Vermelho
                 () => {
-                    fetch('/api/admin-action/', {
+                    // Dentro das funções de admin-action (executarIntervalo, fecharHorarioEspecifico, realizarLiberacaoDomingo, etc.):
+                    fetch(`${API_BASE}/api/admin-action/`, {
                         method: 'POST',
-                        body: JSON.stringify({ 
-                            acao: 'fechar_intervalo', // Usamos a rota que já existe!
-                            data: data, 
-                            barbeiro: barbeiro, 
-                            inicio: hora, 
-                            fim: hora // Início e fim iguais para fechar apenas um slot
-                        }),
-                        headers: {'X-CSRFToken': '{{ csrf_token }}', 'Content-Type': 'application/json'}
+                        headers: { 
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(dados)
                     })
                     .then(r => r.json())
                     .then(d => {
@@ -1102,15 +1099,13 @@
                     `Deseja liberar o Lucas Borges para atender às ${hora} excepcionalmente?`, 
                     "#27ae60", 
                     () => {
-                        fetch('/api/admin-action/', {
+                        // Dentro das funções de admin-action (executarIntervalo, fecharHorarioEspecifico, realizarLiberacaoDomingo, etc.):
+                        fetch(`${API_BASE}/api/admin-action/`, {
                             method: 'POST',
-                            body: JSON.stringify({ 
-                                acao: 'liberar_horario_especifico', 
-                                data: data, 
-                                barbeiro: barbeiro, 
-                                inicio: hora 
-                            }),
-                            headers: {'X-CSRFToken': '{{ csrf_token }}'}
+                            headers: { 
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(dados)
                         })
                         .then(r => r.json())
                         .then(d => {
@@ -1134,15 +1129,13 @@
                     `Deseja tornar o horário das ${hora} (${barbeiro}) disponível para clientes agendarem?`, 
                     "#27ae60", 
                     () => {
-                        fetch('/api/admin-action/', {
+                        // Dentro das funções de admin-action (executarIntervalo, fecharHorarioEspecifico, realizarLiberacaoDomingo, etc.):
+                        fetch(`${API_BASE}/api/admin-action/`, {
                             method: 'POST',
-                            body: JSON.stringify({ 
-                                acao: 'liberar_almoco', 
-                                data: data, 
-                                barbeiro: barbeiro, 
-                                inicio: hora 
-                            }),
-                            headers: {'X-CSRFToken': '{{ csrf_token }}'}
+                            headers: { 
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(dados)
                         })
                         .then(r => r.json())
                         .then(d => {
@@ -1212,15 +1205,13 @@
                     "#27ae60", // Usamos o verde para indicar liberação
                     () => {
                         // 3. Enviamos o pedido de liberação para a API
-                        fetch('/api/admin-action/', {
+                        // Dentro das funções de admin-action (executarIntervalo, fecharHorarioEspecifico, realizarLiberacaoDomingo, etc.):
+                        fetch(`${API_BASE}/api/admin-action/`, {
                             method: 'POST',
-                            body: JSON.stringify({ 
-                                acao: 'liberar_horario_especifico', // Ação no backend que grava 'Liberado'
-                                data: data, 
-                                barbeiro: barbeiro, 
-                                inicio: hora 
-                            }),
-                            headers: {'X-CSRFToken': '{{ csrf_token }}'}
+                            headers: { 
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(dados)
                         })
                         .then(r => r.json())
                         .then(d => {
@@ -1270,19 +1261,13 @@
                 cor,
                 () => {
                     // CORREÇÃO: URL consistente com a do domingo
-                    fetch('/api/admin-action/', {
+                    // Dentro das funções de admin-action (executarIntervalo, fecharHorarioEspecifico, realizarLiberacaoDomingo, etc.):
+                    fetch(`${API_BASE}/api/admin-action/`, {
                         method: 'POST',
-                        body: JSON.stringify({ 
-                            acao: acao, 
-                            data: data,
-                            barbeiro: barbeiro, 
-                            inicio: inicio, 
-                            fim: fim 
-                        }),
-                        headers: {
-                            'Content-Type': 'application/json', // Boa prática adicionar este header
-                            'X-CSRFToken': '{{ csrf_token }}'
-                        }
+                        headers: { 
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(dados)
                     })
                     .then(r => {
                         if (!r.ok) throw new Error("Erro HTTP " + r.status);
@@ -1329,16 +1314,13 @@
     
         // Função separada que faz a comunicação com o servidor
         function realizarLiberacaoDomingo(dataRef) {
-            fetch('/api/admin-action/', { 
+            // Dentro das funções de admin-action (executarIntervalo, fecharHorarioEspecifico, realizarLiberacaoDomingo, etc.):
+            fetch(`${API_BASE}/api/admin-action/`, {
                 method: 'POST',
                 headers: { 
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token }}'
+                    'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    acao: 'liberar_domingo',
-                    data: dataRef
-                })
+                body: JSON.stringify(dados)
             })
             .then(response => response.json())
             .then(result => {
@@ -1356,10 +1338,10 @@
         }
         
         function cancelarAgendamento(hora, barbeiro) {
-            fetch('/api/cancelar/', {
+            fetch(`${API_BASE}/api/cancelar/`, {
                 method: 'POST',
                 body: JSON.stringify({ data: document.getElementById('dataSelecionada').value, horario: hora, barbeiro: barbeiro }),
-                headers: {'X-CSRFToken': '{{ csrf_token }}'}
+                headers: { 'Content-Type': 'application/json' }
             }).then(r => r.json()).then(d => {
                 if(d.status === 'sucesso') { mostrarMensagem("Cancelado com sucesso.", "sucesso"); buscarOcupados(); } 
                 else { mostrarMensagem("Erro ao cancelar: " + d.mensagem, "erro"); }
@@ -1619,11 +1601,11 @@
 
                 falar(`Agendando ${dadosVoz.nome} às ${dadosVoz.horario} com ${dadosVoz.barbeiro}. Aguarde...`);
 
-                fetch('/api/agendamento-voz-webhook/', {
+                // Dentro da função executarAgendamentoFinal:
+                fetch(`${API_BASE}/api/agendamento-voz-webhook/`, {
                     method: 'POST',
                     headers: { 
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': '{{ csrf_token }}'
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(dadosVoz)
                 })
