@@ -5,9 +5,6 @@ import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
-import android.view.Window;
-import android.view.WindowManager;
-import android.graphics.Color;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
@@ -15,17 +12,10 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // =================================================================
-        // 1. COR DA BARRA DE NOTIFICAÇÕES (Solução sem terminal)
-        // =================================================================
-        Window window = getWindow();
-        window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
-        window.setStatusBarColor(Color.parseColor("#485460")); // A tua cor do cabeçalho
-
         WebView webView = this.bridge.getWebView();
 
         // =================================================================
-        // 2. BLINDAGEM DO SEU DATA-THEME (Impede o Android de estragar cores)
+        // 1. BLINDAGEM DO SEU DATA-THEME (Impede o Android de estragar cores)
         // =================================================================
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             webView.getSettings().setForceDark(WebSettings.FORCE_DARK_OFF);
@@ -41,7 +31,7 @@ public class MainActivity extends BridgeActivity {
         }
 
         // =================================================================
-        // 3. CORREÇÃO DO MICROFONE (Permissão contínua)
+        // 2. CORREÇÃO DO MICROFONE (Permissão contínua)
         // =================================================================
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
