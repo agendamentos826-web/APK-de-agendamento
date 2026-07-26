@@ -947,27 +947,31 @@
         function fecharHorarioEspecifico(hora, barbeiro) {
             const data = document.getElementById('dataSelecionada').value;
             
-            // Aproveita a função de modal já existente
+            // Criamos o objeto 'dados' antes de enviar para o servidor
+            const dados = { 
+                data: data, 
+                horario: hora, 
+                barbeiro: barbeiro, 
+                acao: 'fechar_horario' 
+            };
+
             abrirModalConfirmacao(
                 "Fechar Horário?", 
                 `Deseja bloquear o horário das ${hora} (${barbeiro})?`, 
-                "#c0392b", // Vermelho
+                "#c0392b", 
                 () => {
-                    // Dentro das funções de admin-action (executarIntervalo, fecharHorarioEspecifico, realizarLiberacaoDomingo, etc.):
                     fetch(`${API_BASE}/api/admin-action/`, {
                         method: 'POST',
-                        headers: { 
-                            'Content-Type': 'application/json'
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(dados)
                     })
                     .then(r => r.json())
                     .then(d => {
-                        if(d.status === 'sucesso') { 
+                        if(d.status === 'sucesso' || d.sucesso) { 
                             mostrarMensagem("Horário fechado!", "sucesso");
                             buscarOcupados(); 
                         } else {
-                            mostrarMensagem("Erro: " + d.mensagem, "erro");
+                            mostrarMensagem("Erro: " + (d.mensagem || "Falha ao fechar"), "erro");
                         }
                     })
                     .catch(err => {
@@ -1090,26 +1094,24 @@
         }
 
         function gerenciarCliqueSlot(hora, barbeiro, status, nomeCliente) {
-    
+            const data = document.getElementById('dataSelecionada').value;
+
             // 1. REGRA DAS 8H
             if (status === 'regra_8h') {
-                const data = document.getElementById('dataSelecionada').value;
+                const dados = { data: data, horario: hora, barbeiro: barbeiro, acao: 'liberar_8h' };
                 abrirModalConfirmacao(
                     "Liberar Horário?", 
                     `Deseja liberar o Lucas Borges para atender às ${hora} excepcionalmente?`, 
                     "#27ae60", 
                     () => {
-                        // Dentro das funções de admin-action (executarIntervalo, fecharHorarioEspecifico, realizarLiberacaoDomingo, etc.):
                         fetch(`${API_BASE}/api/admin-action/`, {
                             method: 'POST',
-                            headers: { 
-                                'Content-Type': 'application/json'
-                            },
+                            headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(dados)
                         })
                         .then(r => r.json())
                         .then(d => {
-                            if(d.status === 'sucesso') {
+                            if(d.status === 'sucesso' || d.sucesso) {
                                 mostrarMensagem("Horário liberado!", "sucesso");
                                 buscarOcupados(); 
                             } else {
@@ -1120,26 +1122,23 @@
                 );
                 return; 
             }
-        
-            // 2. ALMOÇO PADRÃO (Laranja) -> Clica para Liberar
+            
+            // 2. ALMOÇO PADRÃO
             else if (status === 'lunch') {
-                const data = document.getElementById('dataSelecionada').value;
+                const dados = { data: data, horario: hora, barbeiro: barbeiro, acao: 'liberar_almoco' };
                 abrirModalConfirmacao(
                     "Liberar Almoço?", 
                     `Deseja tornar o horário das ${hora} (${barbeiro}) disponível para clientes agendarem?`, 
                     "#27ae60", 
                     () => {
-                        // Dentro das funções de admin-action (executarIntervalo, fecharHorarioEspecifico, realizarLiberacaoDomingo, etc.):
                         fetch(`${API_BASE}/api/admin-action/`, {
                             method: 'POST',
-                            headers: { 
-                                'Content-Type': 'application/json'
-                            },
+                            headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(dados)
                         })
                         .then(r => r.json())
                         .then(d => {
-                            if(d.status === 'sucesso') {
+                            if(d.status === 'sucesso' || d.sucesso) {
                                 mostrarMensagem("Horário liberado com sucesso!", "sucesso");
                                 buscarOcupados(); 
                             } else {
@@ -1155,15 +1154,12 @@
                 return;
             }
             
-            // 3. AGENDAMENTO (Verde ou "Liberado")
-            // --- CORREÇÃO AQUI ---
-            // Adicionamos: || status === 'liberado_force' || nomeCliente === 'Livre'
+            // 3. AGENDAMENTO
             else if (status === 'livre' || status === 'liberado_force' || nomeCliente === 'Liberado' || nomeCliente === 'Livre') {
                 document.getElementById('checkAlmoco').checked = false;
                 document.getElementById('checkBarba').checked = false;
                 document.getElementById('nomeCliente').value = '';
                 
-                // Reset Select Customizado do Modal
                 const modalSelect = document.getElementById('servicoCliente');
                 const modalText = document.getElementById('select-text');
                 const modalWrapper = document.getElementById('custom-select-wrapper');
@@ -1179,11 +1175,11 @@
                     const defaultOpt = modalWrapper.querySelector('.custom-option[data-value="Interno"]');
                     if(defaultOpt) defaultOpt.classList.add('selected');
                 }
-        
+
                 abrirModalAgendar(hora, barbeiro);
             } 
-        
-            // 4. CANCELAMENTO (Ocupado Real)
+            
+            // 4. CANCELAMENTO
             else if (status === 'ocupado' || status === 'pezim') {
                 abrirModalConfirmacao(
                     'Cancelar Agendamento?', 
@@ -1192,31 +1188,23 @@
                     () => cancelarAgendamento(hora, barbeiro)
                 );
             }
-        
+            
             // 5. FECHADO
             else if (status === 'fechado') {
-                // 1. Coletamos a data que está preenchida no input
-                const data = document.getElementById('dataSelecionada').value;
-            
-                // 2. Abrimos o modal reaproveitando a função já existente
+                const dados = { data: data, horario: hora, barbeiro: barbeiro, acao: 'liberar_horario' };
                 abrirModalConfirmacao(
                     "Liberar Horário?", 
                     `Tem certeza que quer liberar o horário das ${hora} (${barbeiro}) para agendamentos?`, 
-                    "#27ae60", // Usamos o verde para indicar liberação
+                    "#27ae60", 
                     () => {
-                        // 3. Enviamos o pedido de liberação para a API
-                        // Dentro das funções de admin-action (executarIntervalo, fecharHorarioEspecifico, realizarLiberacaoDomingo, etc.):
                         fetch(`${API_BASE}/api/admin-action/`, {
                             method: 'POST',
-                            headers: { 
-                                'Content-Type': 'application/json'
-                            },
+                            headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(dados)
                         })
                         .then(r => r.json())
                         .then(d => {
-                            if(d.status === 'sucesso') {
-                                // 4. Mostramos mensagem de sucesso e recarregamos a grade
+                            if(d.status === 'sucesso' || d.sucesso) {
                                 mostrarMensagem("Horário liberado com sucesso!", "sucesso");
                                 buscarOcupados(); 
                             } else {
@@ -1230,7 +1218,6 @@
                     }
                 );
             }
-
         }
         
         function executarIntervalo(acao) {
@@ -1239,34 +1226,33 @@
             let modo = 'intervalo';
             const radios = document.getElementsByName(`modo${prefixo.charAt(0).toUpperCase() + prefixo.slice(1)}`);
             for(let r of radios) if(r.checked) modo = r.value;
-        
+
             const barbeiro = document.getElementById(prefixo+'Barbeiro').value;
             const inicio = document.getElementById(prefixo+'Inicio').value;
             let fim = document.getElementById(prefixo+'Fim').value;
             const data = document.getElementById('dataSelecionada').value;
-        
+
             if (!data) {
                 mostrarMensagem("Por favor, selecione uma data no calendário primeiro!", "erro");
                 return;
             }
-        
+
             if (modo === 'unico') fim = inicio; 
-        
+
             const txtAcao = acao === 'fechar_intervalo' ? 'Bloquear' : 'Liberar';
             const cor = acao === 'fechar_intervalo' ? '#c0392b' : '#27ae60';
-        
+            
+            // Criamos o objeto 'dados' com as informações do intervalo
+            const dados = { barbeiro: barbeiro, inicio: inicio, fim: fim, data: data, acao: acao };
+
             abrirModalConfirmacao(
                 `${txtAcao} Horários?`, 
                 `${txtAcao} agenda de ${barbeiro} das ${inicio} às ${fim} no dia ${data}?`, 
                 cor,
                 () => {
-                    // CORREÇÃO: URL consistente com a do domingo
-                    // Dentro das funções de admin-action (executarIntervalo, fecharHorarioEspecifico, realizarLiberacaoDomingo, etc.):
                     fetch(`${API_BASE}/api/admin-action/`, {
                         method: 'POST',
-                        headers: { 
-                            'Content-Type': 'application/json'
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(dados)
                     })
                     .then(r => {
@@ -1274,9 +1260,8 @@
                         return r.json();
                     })
                     .then(d => {
-                        if(d.status === 'sucesso') {
-                            mostrarMensagem(d.mensagem, 'sucesso');
-                            // Retorna para a aba de agendar e atualiza
+                        if(d.status === 'sucesso' || d.sucesso) {
+                            mostrarMensagem(d.mensagem || "Ação executada!", 'sucesso');
                             mudarModo('agendar', document.querySelector('.tabs button:first-child'));
                             buscarOcupados(); 
                         } else {
@@ -1290,6 +1275,7 @@
                 }
             );
         }
+
         // Função acionada pelo botão "Liberar Domingo"
         function liberarDomingo() {
             const dataRef = document.getElementById('dataSelecionada').value;
@@ -1314,19 +1300,19 @@
     
         // Função separada que faz a comunicação com o servidor
         function realizarLiberacaoDomingo(dataRef) {
-            // Dentro das funções de admin-action (executarIntervalo, fecharHorarioEspecifico, realizarLiberacaoDomingo, etc.):
+            // Criamos o objeto 'dados' contendo a data e a ação
+            const dados = { data: dataRef, acao: 'liberar_domingo' };
+
             fetch(`${API_BASE}/api/admin-action/`, {
                 method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(dados)
             })
             .then(response => response.json())
             .then(result => {
-                if (result.status === 'sucesso') {
+                if (result.status === 'sucesso' || result.sucesso) {
                     mostrarMensagem("Agenda de Domingo liberada!", "sucesso");
-                    buscarOcupados(); // Atualiza a tela imediatamente
+                    buscarOcupados(); 
                 } else {
                     mostrarMensagem("Erro: " + result.mensagem, "erro");
                 }
