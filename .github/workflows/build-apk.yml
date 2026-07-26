@@ -17,11 +17,11 @@ jobs:
       - name: Baixar código do repositório
         uses: actions/checkout@v4
 
-      # 2. Configurar o ambiente Node.js 20
-      - name: Configurar Node.js 20
+      # 2. Configurar o ambiente Node.js 22
+      - name: Configurar Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       # 3. Configurar Java JDK 17
       - name: Configurar Java 17
@@ -30,37 +30,33 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # 4. Instalar dependências
+      # 4. Instalar dependências declaradas no package.json
       - name: Instalar Dependências
         run: |
           npm install
           npm install -g @capacitor/assets || true
 
-      # 5. Criar pasta WWW de suporte e Sincronizar
-      - name: Preparar Pasta WWW e Sincronizar Capacitor
+      # 5. Preparar pasta WWW e Sincronizar Plugins Nativo
+      - name: Sincronizar Capacitor e Gerar Recursos
         run: |
-          # Garante que a pasta www existe
           mkdir -p www
-          
-          # Cria um index.html basico apenas para o Capacitor nao dar erro de pasta vazia
-          echo '<!DOCTYPE html><html><head><title>Agendamento LB</title></head><body></body></html>' > www/index.html
 
-          # Se o executavel gradlew NAO existir, recria a estrutura nativa
+          # Recria a estrutura nativa do Android caso não exista
           if [ ! -f "android/gradlew" ]; then
-            echo "Estrutura nativa não encontrada. Gerando pasta android..."
+            echo "Recriando pasta nativa do Android..."
             rm -rf android
             npx cap add android
           fi
 
-          # Sincroniza o capacitor.config.json (Barra de status e URL do Render) com o Android
+          # Sincroniza a pasta www e os plugins (StatusBar) com o Android
           npx cap sync android
 
-          # Gera ícones nativos caso exista assets/icon.png
+          # Gera ícones nativos para todas as resoluções Android
           if [ -f "assets/icon.png" ]; then
             npx capacitor-assets generate --android || true
           fi
 
-      # 6. Compilar o APK Android usando o Gradle
+      # 6. Compilar o APK Android
       - name: Compilar APK Android
         run: |
           cd android
@@ -71,5 +67,5 @@ jobs:
       - name: Disponibilizar APK para Download
         uses: actions/upload-artifact@v4
         with:
-          name: Agendamento-LB-Debug
+          name: Agendamento LB
           path: android/app/build/outputs/apk/debug/app-debug.apk
