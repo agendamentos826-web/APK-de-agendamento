@@ -1486,38 +1486,87 @@
 
             // 4. Liga/Desliga o assistente manualmente ao clicar no botão
             async function alternarEscutaVoz() {
+                // 1. Verifica se estamos rodando nativamente no celular via Capacitor
+                const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
+
                 if (modoEscutaAtivo) {
+                    // ... SEU CÓDIGO ATUAL DE DESLIGAR O MICROFONE ...
                     modoEscutaAtivo = false;
                     microfonePausadoPeloSistema = false;
                     estaFalando = false;
                     window.speechSynthesis.cancel();
-                    try { reconhecimento.stop(); } catch (e) {}
+                    
+                    if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
+                        window.Capacitor.Plugins.SpeechRecognition.stop();
+                    } else {
+                        try { reconhecimento.stop(); } catch (e) {}
+                    }
                     
                     resetarDados();
                     atualizarIndicador("🎙️ Toque para ativar. Diga 'Ney' para chamar.", "pronto");
-                    if (typeof mostrarMensagem === 'function') {
-                        mostrarMensagem("Assistente pausado.", "erro");
-                    }
-                } else {
-                    modoEscutaAtivo = true;
-                    microfonePausadoPeloSistema = false;
-                    resetarDados();
+                    return;
+                } 
 
-                    // Pede permissão de áudio UMA ÚNICA VEZ ao clicar no botão de ativar
+                // ATIVANDO O MICROFONE
+                modoEscutaAtivo = true;
+                microfonePausadoPeloSistema = false;
+                resetarDados();
+                atualizarIndicador("👂 Iniciando microfone...", "ouvindo");
+
+                if (isNativo) {
+                    // ==========================================
+                    // LÓGICA PARA O APK ANDROID (CAPACITOR PLUGIN)
+                    // ==========================================
+                    const { SpeechRecognition } = window.Capacitor.Plugins;
+                    
+                    try {
+                        // Chama a "caixinha" nativa do Android pedindo permissão
+                        const hasPermission = await SpeechRecognition.checkPermissions();
+                        if (hasPermission.speechRecognition !== 'granted') {
+                            await SpeechRecognition.requestPermissions();
+                        }
+
+                        // Inicia o reconhecimento de voz nativo
+                        await SpeechRecognition.start({
+                            language: "pt-BR",
+                            partialResults: true,
+                            popup: false // Define false para não abrir a janela do Google gigante na tela
+                        });
+
+                        // Escuta os resultados nativos e repassa para a sua função existente
+                        SpeechRecognition.addListener("partialResults", (data) => {
+                            if(data.matches && data.matches.length > 0) {
+                                const textoDitoNativo = data.matches[0];
+                                // Chama a sua função de extração que já está pronta!
+                                extrairInformacoes(textoDitoNativo);
+                                avaliarEAvancar();
+                            }
+                        });
+
+                    } catch (erro) {
+                        console.error("Erro no SpeechRecognition nativo:", erro);
+                        modoEscutaAtivo = false;
+                        atualizarIndicador("⚠️ Erro no mic nativo.", "pronto");
+                    }
+                    
+                } else {
+                    // ==========================================
+                    // LÓGICA ORIGINAL PARA NAVEGADOR WEB (SEU CÓDIGO)
+                    // ==========================================
                     try {
                         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                             const streamAudio = await navigator.mediaDevices.getUserMedia({ audio: true });
                             streamAudio.getTracks().forEach(track => track.stop());
                         }
                     } catch (erro) {
-                        console.error("Permissão de microfone negada:", erro);
+                        console.error("Permissão de microfone negada na Web:", erro);
                         modoEscutaAtivo = false;
                         atualizarIndicador("⚠️ Permissão de microfone negada.", "pronto");
                         return;
                     }
 
                     atualizarIndicador("👂 Aguardando você dizer 'Ney'...", "ouvindo");
-                    iniciarCapturaMic();
+                    iniciarCapturaMic(); // Função que você já criou com webkitSpeechRecognition
                 }
             }
 

@@ -4,6 +4,7 @@
   "description": "Aplicativo Agendamentos Lucas Borges",
   "main": "index.js",
   "dependencies": {
+    "@capacitor-community/speech-recognition": "^6.0.1",
     "@capacitor/android": "^6.0.0",
     "@capacitor/core": "^6.0.0",
     "@capacitor/status-bar": "^6.0.3"
