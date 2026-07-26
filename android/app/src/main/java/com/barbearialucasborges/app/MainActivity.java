@@ -1,49 +1,49 @@
 package com.barbearialucasborges.app;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
+    private static final int CODIGO_PERMISSAO_MIC = 1001;
+
     @Override
-    public void onCreate(Bundle savedInstanceState) {
+    protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        WebView webView = this.bridge.getWebView();
+        // 1. Solicita a permissão nativa de microfone ao sistema Android se ainda não foi concedida
+        solicitarPermissaoMicrofoneNativa();
 
-        // =================================================================
-        // 1. BLINDAGEM DO SEU DATA-THEME (Impede o Android de estragar cores)
-        // =================================================================
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-            webView.getSettings().setForceDark(WebSettings.FORCE_DARK_OFF);
+        // 2. Autoriza a WebView do Capacitor a repassar o áudio para o JavaScript
+        configurarWebViewParaMicrofone();
+    }
+
+    private void solicitarPermissaoMicrofoneNativa() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            
+            ActivityCompat.requestPermissions(
+                this,
+                new String[]{Manifest.permission.RECORD_AUDIO},
+                CODIGO_PERMISSAO_MIC
+            );
         }
+    }
 
-        try {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                WebSettings.class.getMethod("setAlgorithmicDarkeningAllowed", boolean.class)
-                        .invoke(webView.getSettings(), false);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
+    private void configurarWebViewParaMicrofone() {
+        if (this.bridge != null && this.bridge.getWebView() != null) {
+            this.bridge.getWebView().setWebChromeClient(new WebChromeClient() {
+                @Override
+                public void onPermissionRequest(final PermissionRequest request) {
+                    // Executa na thread principal para autorizar a requisição de mídia da página Web
+                    runOnUiThread(() -> request.grant(request.getResources()));
+                }
+            });
         }
-
-        // =================================================================
-        // 2. CORREÇÃO DO MICROFONE (Permissão contínua)
-        // =================================================================
-        webView.setWebChromeClient(new WebChromeClient() {
-            @Override
-            public void onPermissionRequest(final PermissionRequest request) {
-                runOnUiThread(() -> {
-                    try {
-                        request.grant(request.getResources());
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                });
-            }
-        });
     }
 }
