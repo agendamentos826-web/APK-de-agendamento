@@ -1429,6 +1429,8 @@
         let microfonePausadoPeloSistema = false; 
         let dadosVoz = { nome: '', horario: '', barbeiro: '', data: '' };
         let ouvinteCapacitorAdicionado = false;
+        // NOVO: Variável para impedir que ciclos antigos travem o microfone
+        let sessaoVozAtual = 0;
 
         // --- 1. CONFIGURAÇÃO DA WEB (SE ESTIVER NO PC/NAVEGADOR) ---
         const SpeechRecognitionWeb = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1554,9 +1556,23 @@
         function processarComandoVoz(textoReconhecido) {
             const textoDito = textoReconhecido.trim().toLowerCase();
             
-            // Só dispara se ouvir "Ney"
-            if (textoDito.includes('ney')) {
-                const comando = textoDito.replace(/ney/g, '').trim();
+            // Lista de como o Android costuma escrever "Ney"
+            const variacoesNey = ['ney', 'nei', 'néi', 'nem'];
+            
+            let ativou = false;
+            let comando = textoDito;
+
+            // Procura por qualquer uma das variações
+            for (let v of variacoesNey) {
+                if (textoDito.includes(v)) {
+                    ativou = true;
+                    // Limpa o nome para sobrar só o comando ("agendar...")
+                    comando = textoDito.replace(new RegExp(v, 'g'), '').trim();
+                    break;
+                }
+            }
+
+            if (ativou) {
                 extrairInformacoes(comando);
                 avaliarEAvancar();
             }
@@ -1656,6 +1672,9 @@
         async function iniciarCapturaMic() {
             if (!modoEscutaAtivo || microfonePausadoPeloSistema) return;
             
+            // Guarda a sessão exata de quando esta função foi chamada
+            const sessaoDestaChamada = sessaoVozAtual; 
+
             try {
                 const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
                 
@@ -1677,8 +1696,8 @@
                         popup: false 
                     });
                     
-                    // Se o silêncio desligou o mic nativo, religa automaticamente
-                    if (modoEscutaAtivo && !microfonePausadoPeloSistema) {
+                    // SÓ RELIGA se a sessão não tiver mudado e o utilizador não tiver desligado
+                    if (modoEscutaAtivo && !microfonePausadoPeloSistema && sessaoDestaChamada === sessaoVozAtual) {
                         setTimeout(() => iniciarCapturaMic(), 300);
                     }
                     
@@ -1686,7 +1705,8 @@
                     reconhecimentoWeb.start();
                 }
             } catch (e) {
-                if (modoEscutaAtivo && !microfonePausadoPeloSistema) {
+                // Se der erro no nativo, tenta de novo apenas se ainda estivermos na mesma sessão
+                if (modoEscutaAtivo && !microfonePausadoPeloSistema && sessaoDestaChamada === sessaoVozAtual) {
                     setTimeout(() => iniciarCapturaMic(), 800);
                 }
             }
@@ -1705,10 +1725,10 @@
                     // ==========================================
                     modoEscutaAtivo = false;
                     microfonePausadoPeloSistema = false;
+                    sessaoVozAtual++; // Avança a sessão para MATAR ciclos fantasmas
                     resetarDados();
                     atualizarIndicador("🎙️ Toque para ativar o Comando", "pronto");
                     
-                    // CORREÇÃO 1: Cala a boca do Ney imediatamente se ele estiver falando
                     if (window.speechSynthesis) {
                         window.speechSynthesis.cancel();
                     }
@@ -1717,7 +1737,6 @@
                     if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
                         try { await window.Capacitor.Plugins.SpeechRecognition.stop(); } catch(e){}
                     } else if (reconhecimentoWeb) {
-                        // CORREÇÃO 2: Usar abort() em vez de stop() mata o áudio na raiz e evita "zumbis"
                         try { reconhecimentoWeb.abort(); } catch(e){}
                     }
                 
@@ -1727,12 +1746,12 @@
                     // ==========================================
                     modoEscutaAtivo = true;
                     microfonePausadoPeloSistema = false;
+                    sessaoVozAtual++; // Inicia uma nova sessão exclusiva
                     resetarDados();
                     atualizarIndicador("⏳ Iniciando...", "ouvindo");
                     
                     const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
                     
-                    // CORREÇÃO 3: Recriar a escuta Web DO ZERO sempre que ligar manualmente
                     if (!isNativo && SpeechRecognitionWeb) {
                         try { if (reconhecimentoWeb) reconhecimentoWeb.abort(); } catch(e){}
                         
@@ -1747,6 +1766,7 @@
                         };
 
                         reconhecimentoWeb.onend = () => {
+                            // Proteção de sessão também adicionada na Web
                             if (modoEscutaAtivo && !microfonePausadoPeloSistema && !window.speechSynthesis.speaking) {
                                 iniciarCapturaMic();
                             }
@@ -1769,10 +1789,11 @@
                     }
 
                     atualizarIndicador("👂 Diga 'Ney' e o comando...", "ouvindo");
-                    iniciarCapturaMic();
+                    
+                    // Um pequeno delay para dar tempo do sistema limpar a memória
+                    setTimeout(() => iniciarCapturaMic(), 150);
                 }
             } finally {
-                // GARANTIA ABSOLUTA: O botão SEMPRE destrava após meio segundo
                 setTimeout(() => { bloqueioBotao = false; }, 500);
             }
         }
@@ -1847,34 +1868,23 @@
             const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
             
             if (document.hidden) {
-                // O APP FOI MINIMIZADO OU A TELA DESLIGOU
                 if (modoEscutaAtivo) {
-                    console.log("App minimizado. Pausando microfone...");
-                    // Anotamos que foi o sistema que pausou, não o usuário
                     microfonePausadoPeloSistema = true; 
-                    
-                    // Desligamos a variável para matar aquele nosso loop infinito
                     modoEscutaAtivo = false; 
+                    sessaoVozAtual++; // Mata a sessão pendente
                     
-                    // Forçamos o microfone a parar de vez
                     if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
                         window.Capacitor.Plugins.SpeechRecognition.stop();
                     } else {
-                        try { reconhecimento.stop(); } catch(e){}
+                        // Corrigido para reconhecimentoWeb
+                        try { if(reconhecimentoWeb) reconhecimentoWeb.abort(); } catch(e){} 
                     }
                     
                     atualizarIndicador("⏸️ App em segundo plano. Mic pausado.", "pronto");
                 }
             } else {
-                // O APP VOLTOU PARA A TELA (PRIMEIRO PLANO)
-                // Se o microfone estava ligado antes de minimizar, nós ligamos de novo!
                 if (microfonePausadoPeloSistema) {
-                    console.log("App voltou! Reativando microfone...");
-                    
-                    // Resetamos a variável
                     microfonePausadoPeloSistema = false;
-                    
-                    // Como modoEscutaAtivo agora é false, chamar essa função vai LIGAR o mic
                     alternarEscutaVoz(); 
                 }
             }
