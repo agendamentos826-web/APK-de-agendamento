@@ -1455,22 +1455,52 @@
         }
 
         // --- 2. FUNÇÕES DE SUPORTE VISUAL E DADOS ---
-        function falar(texto, callbackAoTerminar) {
+        async function falar(texto, callbackAoTerminar) {
+            // Tenta parar o microfone antes de falar para o Ney não ouvir a própria voz
             if (reconhecimentoWeb) { try { reconhecimentoWeb.stop(); } catch (e) {} }
+            const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
 
-            const mensagem = new SpeechSynthesisUtterance(texto);
-            mensagem.lang = 'pt-BR';
-            mensagem.rate = 1.08; 
-
-            mensagem.onend = () => {
-                if (modoEscutaAtivo && callbackAoTerminar) {
-                    callbackAoTerminar();
-                } else if (modoEscutaAtivo) {
-                    iniciarCapturaMic(); 
+            if (isNativo && window.Capacitor.Plugins.TextToSpeech) {
+                try {
+                    // Usa a voz nativa do Android (Não trava e não precisa de clique)
+                    await window.Capacitor.Plugins.TextToSpeech.speak({
+                        text: texto,
+                        lang: 'pt-BR',
+                        rate: 1.0
+                    });
+                    
+                    // Como usamos await, ele só chega nesta linha quando terminar de falar!
+                    if (modoEscutaAtivo && callbackAoTerminar) {
+                        callbackAoTerminar();
+                    } else if (modoEscutaAtivo) {
+                        iniciarCapturaMic(); 
+                    }
+                } catch (e) {
+                    console.error("Erro na voz nativa: ", e);
+                    // Se der erro na voz, não trava o app, volta a ouvir
+                    if (modoEscutaAtivo) iniciarCapturaMic();
                 }
-            };
+            } else {
+                // Motor Web Normal (PC)
+                const mensagem = new SpeechSynthesisUtterance(texto);
+                mensagem.lang = 'pt-BR';
+                mensagem.rate = 1.08; 
 
-            window.speechSynthesis.speak(mensagem);
+                mensagem.onend = () => {
+                    if (modoEscutaAtivo && callbackAoTerminar) {
+                        callbackAoTerminar();
+                    } else if (modoEscutaAtivo) {
+                        iniciarCapturaMic(); 
+                    }
+                };
+                
+                // Prevenção de travamento na Web
+                mensagem.onerror = () => {
+                    if (modoEscutaAtivo) iniciarCapturaMic();
+                };
+
+                window.speechSynthesis.speak(mensagem);
+            }
         }
 
         function atualizarIndicador(texto, estado) {
@@ -1599,7 +1629,6 @@
                     
                     if (!ouvinteCapacitorAdicionado) {
                         window.Capacitor.Plugins.SpeechRecognition.addListener('partialResults', (data) => {
-                            // Se o Android ouvir qualquer coisa, joga para nossa função
                             if (data.matches && data.matches.length > 0) {
                                 processarComandoVoz(data.matches[0]);
                             }
@@ -1607,15 +1636,13 @@
                         ouvinteCapacitorAdicionado = true;
                     }
 
-                    // === CORREÇÃO 2: popup: true ===
-                    // Isso força a interface nativa do Google a aparecer, o que impede
-                    // o Android de bloquear a escuta em segundo plano.
+                    // Removido o popup: true como você pediu
                     await window.Capacitor.Plugins.SpeechRecognition.start({
                         language: "pt-BR",
-                        maxResults: 3,
-                        prompt: "Diga 'Ney' e o comando", 
+                        maxResults: 2,
+                        prompt: "", 
                         partialResults: true,
-                        popup: true 
+                        popup: false 
                     });
                     
                 } else if (reconhecimentoWeb) {
@@ -1626,8 +1653,13 @@
                 }
             } catch (e) {
                 console.error("Erro ao ativar microfone: ", e);
-                modoEscutaAtivo = false;
-                atualizarIndicador("🎙️ Erro. Toque para tentar de novo.", "pronto");
+                // No Android, se o usuário ficar calado muito tempo, o motor desliga sozinho e cai aqui.
+                // Para manter a escuta contínua, tentamos ligar de novo se não tiver erro grave.
+                if (modoEscutaAtivo) {
+                    setTimeout(() => iniciarCapturaMic(), 500);
+                } else {
+                    atualizarIndicador("🎙️ Erro. Toque para tentar de novo.", "pronto");
+                }
             }
         }
 
