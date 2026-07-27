@@ -1452,10 +1452,12 @@
         const SpeechRecognitionWeb = window.SpeechRecognition || window.webkitSpeechRecognition;
         let reconhecimentoWeb = null;
 
-        // --- 1. PROCESSAMENTO INTELIGENTE DE VOZ (CORREÇÃO DE TRAVAMENTO) ---
-        async function processarComandoVoz(textoReconhecido) {
+        // ==============================================================================
+        // 1. PROCESSAMENTO DE VOZ (FLUXO LIMPO SEM TRAVAMENTOS)
+        // ==============================================================================
+        function processarComandoVoz(textoReconhecido) {
             if (!textoReconhecido || textoReconhecido.trim() === "") return;
-            if (isProcessingCommand || window.speechSynthesis?.speaking) return;
+            if (isProcessingCommand) return;
 
             const textoLimpo = textoReconhecido
                 .toLowerCase()
@@ -1484,23 +1486,23 @@
                 }
             }
 
-            // 4. AÇÃO: Execução Imediata
             if (ativou) {
                 isProcessingCommand = true;
                 
-                // TRUQUE: Enviamos a ordem de paragem em segundo plano SEM o 'await'.
-                // Assim, se o Android já tiver parado o microfone (como vimos no vídeo),
-                // o código não congela e avança imediatamente para a próxima linha!
-                const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
-                if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
-                    window.Capacitor.Plugins.SpeechRecognition.stop().catch(() => {});
-                }
+                // Dispara a paragem do microfone atual em segundo plano de forma silenciosa
+                try {
+                    const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
+                    if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
+                        window.Capacitor.Plugins.SpeechRecognition.stop().catch(() => {});
+                    }
+                } catch(e) {}
 
-                // Extraímos as informações faladas
                 extrairInformacoes(comando);
                 
-                // Chamamos diretamente a avaliação para o assistente te responder na hora
-                avaliarEAvancar();
+                // Dá um pequeno respiro de 300ms para o Android se organizar antes de falar
+                setTimeout(() => {
+                    avaliarEAvancar();
+                }, 300);
             }
         }
 
@@ -1587,23 +1589,13 @@
         // 3. REATIVAÇÃO AUTOMÁTICA DO MICROFONE (COM LIMPEZA DE CANAL DE ÁUDIO)
         // ==============================================================================
         function liberarEContinuarEscuta() {
-            // 1. Libera o bloqueio de comando para que o sistema aceite novas palavras
             isProcessingCommand = false;
-
+            
             if (modoEscutaAtivo) {
-                
-                // 2. TRUQUE DE MESTRE: Força o motor de voz (TTS) a libertar o hardware.
-                // Como esta função é chamada APÓS a fala terminar, isto não corta o áudio,
-                // apenas destrava o canal para que o microfone possa assumir o controlo.
-                if (window.speechSynthesis) {
-                    window.speechSynthesis.cancel();
-                }
-
-                // 3. Damos 800 milissegundos para o processador do telemóvel efetivar a limpeza,
-                // e depois chamamos a captura do microfone.
+                // Aguarda meio segundo após a fala terminar para ligar o ouvido novamente
                 setTimeout(() => {
                     iniciarCapturaMic();
-                }, 800);
+                }, 500);
             }
         }
 
@@ -1637,40 +1629,22 @@
         // --- 2. SÍNTESE DE VOZ (TTS) E CONTROLO DE ÁUDIO ---
         // ==============================================================================
         function falar(texto, callbackAposFalar) {
-            // 1. Cancela qualquer fala que tenha ficado presa na memória
-            if (window.speechSynthesis) {
-                window.speechSynthesis.cancel();
-            }
-
+            // NOTA: Foi removido o window.speechSynthesis.cancel() para evitar o bug de mudez
             const mensagem = new SpeechSynthesisUtterance(texto);
             mensagem.lang = 'pt-BR';
-            mensagem.rate = 1.0; // Velocidade normal
+            mensagem.rate = 1.0; 
 
-            let callbackJaExecutado = false;
-
-            // 2. Função interna para garantir que o microfone só liga UMA vez após a fala
-            const finalizarFala = () => {
-                if (!callbackJaExecutado) {
-                    callbackJaExecutado = true;
-                    if (callbackAposFalar) {
-                        callbackAposFalar(); // Aqui ele chama o liberarEContinuarEscuta()
-                    }
-                }
-            };
-
-            // 3. Gatilho Oficial: Dispara quando o Android avisa que terminou de falar
+            // Assim que terminar de falar, liberta o microfone
             mensagem.onend = function() {
-                finalizarFala();
+                if (callbackAposFalar) callbackAposFalar();
             };
 
-            // 4. Gatilho de Segurança (Fallback): Se o Android bugar e não disparar o onend,
-            // nós calculamos um tempo aproximado (ex: 200ms por letra) para forçar a continuação.
-            const tempoEstimadoDaFrase = texto.length * 200 + 1000; 
-            setTimeout(() => {
-                finalizarFala();
-            }, tempoEstimadoDaFrase);
+            // Segurança: Se o motor de voz falhar, continua o fluxo na mesma
+            mensagem.onerror = function(e) {
+                console.error("Erro silencioso na voz:", e);
+                if (callbackAposFalar) callbackAposFalar(); 
+            };
 
-            // 5. Dá ordem para o telemóvel falar
             window.speechSynthesis.speak(mensagem);
         }
 
