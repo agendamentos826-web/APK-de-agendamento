@@ -1599,18 +1599,23 @@
                     
                     if (!ouvinteCapacitorAdicionado) {
                         window.Capacitor.Plugins.SpeechRecognition.addListener('partialResults', (data) => {
-                            if (data.matches && data.matches.length > 0) processarComandoVoz(data.matches[0]);
+                            // Se o Android ouvir qualquer coisa, joga para nossa função
+                            if (data.matches && data.matches.length > 0) {
+                                processarComandoVoz(data.matches[0]);
+                            }
                         });
                         ouvinteCapacitorAdicionado = true;
                     }
 
-                    // Tenta iniciar a gravação
+                    // === CORREÇÃO 2: popup: true ===
+                    // Isso força a interface nativa do Google a aparecer, o que impede
+                    // o Android de bloquear a escuta em segundo plano.
                     await window.Capacitor.Plugins.SpeechRecognition.start({
                         language: "pt-BR",
-                        maxResults: 2,
-                        prompt: "", // Deixa vazio para ser o mais silencioso possível
+                        maxResults: 3,
+                        prompt: "Diga 'Ney' e o comando", 
                         partialResults: true,
-                        popup: false
+                        popup: true 
                     });
                     
                 } else if (reconhecimentoWeb) {
@@ -1621,8 +1626,6 @@
                 }
             } catch (e) {
                 console.error("Erro ao ativar microfone: ", e);
-                
-                // Se der erro, desliga a interface para o usuário tentar de novo
                 modoEscutaAtivo = false;
                 atualizarIndicador("🎙️ Erro. Toque para tentar de novo.", "pronto");
             }
@@ -1634,6 +1637,11 @@
                 modoEscutaAtivo = false;
                 microfonePausadoPeloSistema = false;
                 
+                // === CORREÇÃO 1: Muda a cor IMEDIATAMENTE antes de qualquer outra coisa ===
+                resetarDados();
+                atualizarIndicador("🎙️ Toque para ativar o Assistente de Voz", "pronto");
+                
+                // Agora sim tenta parar os serviços por baixo dos panos
                 try { window.speechSynthesis.cancel(); } catch(e){}
                 if (reconhecimentoWeb) { try { reconhecimentoWeb.stop(); } catch (e) {} }
                 
@@ -1641,37 +1649,23 @@
                 if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
                     try { await window.Capacitor.Plugins.SpeechRecognition.stop(); } catch(e){}
                 }
-
-                resetarDados();
-                atualizarIndicador("🎙️ Toque para ativar o Assistente de Voz", "pronto");
             
             } else {
                 // LIGA O ASSISTENTE
-                
-                // 1. Muda a interface IMEDIATAMENTE (O botão deixa de ser fantasma aqui)
                 modoEscutaAtivo = true;
                 microfonePausadoPeloSistema = false;
                 resetarDados();
                 atualizarIndicador("⏳ Iniciando...", "ouvindo");
                 
-                // 2. Destrava o motor de áudio para não bugar a voz
-                try { 
-                    window.speechSynthesis.speak(new SpeechSynthesisUtterance('')); 
-                } catch(e){}
+                try { window.speechSynthesis.speak(new SpeechSynthesisUtterance('')); } catch(e){}
 
-                // 3. Lida com a permissão do Android
                 const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
                 
                 if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
                     try {
                         const status = await window.Capacitor.Plugins.SpeechRecognition.checkPermissions();
-                        
-                        // Se não tem permissão, pede.
                         if (status.speechRecognition !== 'granted') {
                             atualizarIndicador("⏳ Aceite a permissão na tela...", "ouvindo");
-                            
-                            // Se o Android bugar e não devolver a resposta, o app para aqui.
-                            // Mas como a permissão já foi dada, o usuário só precisa clicar de novo no botão!
                             await window.Capacitor.Plugins.SpeechRecognition.requestPermissions();
                         }
                     } catch (erroPermissao) {
@@ -1679,8 +1673,7 @@
                     }
                 }
 
-                // 4. Inicia a escuta de fato
-                atualizarIndicador("👂 Escuta ligada. Diga 'Ney' e o comando.", "ouvindo");
+                atualizarIndicador("👂 Diga 'Ney' e o comando...", "ouvindo");
                 iniciarCapturaMic();
             }
         }
