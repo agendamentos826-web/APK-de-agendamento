@@ -1486,8 +1486,106 @@
 
             // 4. Liga/Desliga o assistente manualmente ao clicar no botão
             async function alternarEscutaVoz() {
- 37
+                const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
 
+                // ==========================================
+                // 1. DESLIGAR / CANCELAR (Botão Laranja -> Verde)
+                // ==========================================
+                if (modoEscutaAtivo) {
+                    modoEscutaAtivo = false;
+                    microfonePausadoPeloSistema = false;
+                    estaFalando = false;
+                    
+                    // FORÇAMOS A MUDANÇA VISUAL PRIMEIRO (À prova de falhas)
+                    atualizarIndicador("🎙️ Toque para falar o comando", "pronto");
+                    resetarDados();
+
+                    // DEPOIS paramos os serviços de áudio envolvidos em blocos protegidos
+                    try { window.speechSynthesis.cancel(); } catch (e) {}
+                    
+                    if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
+                        try { 
+                            await window.Capacitor.Plugins.SpeechRecognition.stop(); 
+                        } catch (e) { 
+                            console.warn("Erro ao forçar parada nativa, ignorando:", e); 
+                        }
+                    } else {
+                        try { reconhecimento.stop(); } catch (e) {}
+                    }
+                    
+                    return; // Encerra o fluxo com segurança
+                } 
+
+                // ==========================================
+                // 2. ATIVAR MICROFONE (Botão Verde -> Laranja)
+                // ==========================================
+                modoEscutaAtivo = true;
+                microfonePausadoPeloSistema = false;
+                resetarDados();
+                
+                if (isNativo) {
+                    // --- MODO ANDROID (CAPACITOR) ---
+                    const { SpeechRecognition } = window.Capacitor.Plugins;
+                    aguardandoWakeWord = false; // Não precisa dizer 'Ney', só o comando
+                    
+                    try {
+                        const hasPermission = await SpeechRecognition.checkPermissions();
+                        if (hasPermission.speechRecognition !== 'granted') {
+                            await SpeechRecognition.requestPermissions();
+                        }
+
+                        atualizarIndicador("👂 Fale o comando agora...", "ouvindo");
+                        await SpeechRecognition.removeAllListeners();
+
+                        // Quando ele ouvir a frase, ele processa e DESLIGA sozinho
+                        SpeechRecognition.addListener("partialResults", (data) => {
+                            if(data.matches && data.matches.length > 0) {
+                                const textoDitoNativo = data.matches[0];
+                                extrairInformacoes(textoDitoNativo);
+                                avaliarEAvancar();
+                                
+                                // Sucesso na captura: reseta o botão para verde
+                                if (modoEscutaAtivo) {
+                                    modoEscutaAtivo = false;
+                                    atualizarIndicador("🎙️ Toque para falar o comando", "pronto");
+                                }
+                            }
+                        });
+
+                        // Dá o play no microfone do Android
+                        await SpeechRecognition.start({
+                            language: "pt-BR",
+                            partialResults: true,
+                            popup: false 
+                        });
+
+                    } catch (erro) {
+                        // Se der erro de permissão ou timeout do Google, reseta com segurança
+                        console.error("Erro na escuta:", erro);
+                        if (modoEscutaAtivo) {
+                            modoEscutaAtivo = false;
+                            atualizarIndicador("🎙️ Toque para falar o comando", "pronto");
+                        }
+                    }
+                    
+                } else {
+                    // --- MODO WEB (NAVEGADOR) ---
+                    try {
+                        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                            const streamAudio = await navigator.mediaDevices.getUserMedia({ audio: true });
+                            streamAudio.getTracks().forEach(track => track.stop());
+                        }
+                    } catch (erro) {
+                        console.error("Permissão de mic negada:", erro);
+                        modoEscutaAtivo = false;
+                        atualizarIndicador("⚠️ Sem permissão.", "pronto");
+                        return;
+                    }
+
+                    atualizarIndicador("👂 Aguardando você dizer 'Ney'...", "ouvindo");
+                    iniciarCapturaMic(); 
+                }
+            }
 
             // 5. Inicia a escuta do microfone sem solicitar permissão repetidamente
             function iniciarCapturaMic() {
