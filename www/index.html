@@ -1420,17 +1420,25 @@
         // ==============================================================================
         // ASSISTENTE DE VOZ INTELIGENTE + GESTÃO DE SEGUNDO PLANO (ESTILO ALEXA)
         // ==============================================================================
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
+        const SpeechRecognitionNativo = isNativo ? window.Capacitor.Plugins.SpeechRecognition : null;
+        const SpeechRecognitionWeb = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-        if (SpeechRecognition) {
-            const reconhecimento = new SpeechRecognition();
-            reconhecimento.lang = 'pt-BR';
-            reconhecimento.continuous = true;
-            reconhecimento.interimResults = false;
+        // Verifica se tem suporte nativo ou web
+        if (SpeechRecognitionNativo || SpeechRecognitionWeb) {
+            let reconhecimento = null;
+            
+            // Configura a versão Web apenas se não for nativo (para testes no PC)
+            if (!isNativo && SpeechRecognitionWeb) {
+                reconhecimento = new SpeechRecognitionWeb();
+                reconhecimento.lang = 'pt-BR';
+                reconhecimento.continuous = true;
+                reconhecimento.interimResults = false;
+            }
 
             let modoEscutaAtivo = false;
-            let microfonePausadoPeloSistema = false; // Guarda se o app foi minimizado
-            let estaFalando = false; // Impede que o microfone escute a própria voz do assistente
+            let microfonePausadoPeloSistema = false;
+            let estaFalando = false; 
 
             let aguardandoWakeWord = true;
             const variacoesNey = ['ney', 'nei', 'nay', 'nej', 'né', 'ne'];
@@ -1439,10 +1447,16 @@
 
             // 1. Fala do Sintetizador de Voz (TTS)
             function falar(texto, callbackAoTerminar) {
-                estaFalando = true; // Avisa o sistema que o assistente está falando
-                try { reconhecimento.stop(); } catch (e) {}
+                estaFalando = true;
+                
+                // Para a escuta antes de falar (Nativo ou Web)
+                if (isNativo && SpeechRecognitionNativo) {
+                    try { SpeechRecognitionNativo.stop(); } catch(e){}
+                } else if (reconhecimento) {
+                    try { reconhecimento.stop(); } catch (e) {}
+                }
 
-                window.speechSynthesis.cancel(); // Limpa falas anteriores que possam estar pendentes
+                window.speechSynthesis.cancel();
 
                 const mensagem = new SpeechSynthesisUtterance(texto);
                 mensagem.lang = 'pt-BR';
@@ -1451,10 +1465,7 @@
                 mensagem.onend = () => {
                     estaFalando = false;
                     if (modoEscutaAtivo && callbackAoTerminar) {
-                        // Pequena pausa (300ms) para garantir que a caixa de som silenciou antes de abrir o mic
-                        setTimeout(() => {
-                            callbackAoTerminar();
-                        }, 300);
+                        setTimeout(() => { callbackAoTerminar(); }, 300);
                     }
                 };
 
@@ -1468,7 +1479,7 @@
                 window.speechSynthesis.speak(mensagem);
             }
 
-            // 2. Atualiza a barra do indicador visual de voz na tela
+            // 2. Atualiza a barra visual
             function atualizarIndicador(texto, estado) {
                 const elemento = document.getElementById("indicador-voz");
                 if (elemento) {
@@ -1481,133 +1492,75 @@
             // 3. Reseta os dados armazenados
             function resetarDados() {
                 dadosVoz = { nome: '', horario: '', barbeiro: '', data: '' };
-                aguardandoWakeWord = true; // Volta a aguardar a palavra "Ney"
+                aguardandoWakeWord = true; 
             }
 
-            // 4. Liga/Desliga o assistente manualmente ao clicar no botão
+            // 4. Liga/Desliga o assistente manualmente
             async function alternarEscutaVoz() {
-                const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
-
-                // ==========================================
-                // 1. DESLIGAR / CANCELAR (Botão Laranja -> Verde)
-                // ==========================================
                 if (modoEscutaAtivo) {
+                    // DESLIGAR
                     modoEscutaAtivo = false;
                     microfonePausadoPeloSistema = false;
                     estaFalando = false;
                     
-                    // FORÇAMOS A MUDANÇA VISUAL PRIMEIRO (À prova de falhas)
                     atualizarIndicador("🎙️ Toque para falar o comando", "pronto");
                     resetarDados();
-
-                    // DEPOIS paramos os serviços de áudio envolvidos em blocos protegidos
                     try { window.speechSynthesis.cancel(); } catch (e) {}
                     
-                    if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
-                        try { 
-                            await window.Capacitor.Plugins.SpeechRecognition.stop(); 
-                        } catch (e) { 
-                            console.warn("Erro ao forçar parada nativa, ignorando:", e); 
-                        }
-                    } else {
+                    if (isNativo && SpeechRecognitionNativo) {
+                        try { await SpeechRecognitionNativo.stop(); } catch(e){}
+                    } else if (reconhecimento) {
                         try { reconhecimento.stop(); } catch (e) {}
                     }
-                    
-                    return; // Encerra o fluxo com segurança
-                } 
-
-                // ==========================================
-                // 2. ATIVAR MICROFONE (Botão Verde -> Laranja)
-                // ==========================================
-                modoEscutaAtivo = true;
-                microfonePausadoPeloSistema = false;
-                resetarDados();
-                
-                if (isNativo) {
-                    // --- MODO ANDROID (CAPACITOR) ---
-                    const { SpeechRecognition } = window.Capacitor.Plugins;
-                    aguardandoWakeWord = false; // Não precisa dizer 'Ney', só o comando
-                    
-                    try {
-                        const hasPermission = await SpeechRecognition.checkPermissions();
-                        if (hasPermission.speechRecognition !== 'granted') {
-                            await SpeechRecognition.requestPermissions();
-                        }
-
-                        atualizarIndicador("👂 Fale o comando agora...", "ouvindo");
-                        await SpeechRecognition.removeAllListeners();
-
-                        // Quando ele ouvir a frase, ele processa e DESLIGA sozinho
-                        SpeechRecognition.addListener("partialResults", (data) => {
-                            if(data.matches && data.matches.length > 0) {
-                                const textoDitoNativo = data.matches[0];
-                                extrairInformacoes(textoDitoNativo);
-                                avaliarEAvancar();
-                                
-                                // Sucesso na captura: reseta o botão para verde
-                                if (modoEscutaAtivo) {
-                                    modoEscutaAtivo = false;
-                                    atualizarIndicador("🎙️ Toque para falar o comando", "pronto");
-                                }
-                            }
-                        });
-
-                        // Dá o play no microfone do Android
-                        await SpeechRecognition.start({
-                            language: "pt-BR",
-                            partialResults: true,
-                            popup: false 
-                        });
-
-                    } catch (erro) {
-                        // Se der erro de permissão ou timeout do Google, reseta com segurança
-                        console.error("Erro na escuta:", erro);
-                        if (modoEscutaAtivo) {
-                            modoEscutaAtivo = false;
-                            atualizarIndicador("🎙️ Toque para falar o comando", "pronto");
-                        }
-                    }
-                    
                 } else {
-                    // --- MODO WEB (NAVEGADOR) ---
-                    try {
-                        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                            const streamAudio = await navigator.mediaDevices.getUserMedia({ audio: true });
-                            streamAudio.getTracks().forEach(track => track.stop());
-                        }
-                    } catch (erro) {
-                        console.error("Permissão de mic negada:", erro);
-                        modoEscutaAtivo = false;
-                        atualizarIndicador("⚠️ Sem permissão.", "pronto");
-                        return;
-                    }
-
+                    // LIGAR
+                    modoEscutaAtivo = true;
+                    microfonePausadoPeloSistema = false;
+                    resetarDados();
                     atualizarIndicador("👂 Aguardando você dizer 'Ney'...", "ouvindo");
-                    iniciarCapturaMic(); 
+                    iniciarCapturaMic();
                 }
             }
 
-            // 5. Inicia a escuta do microfone sem solicitar permissão repetidamente
-            function iniciarCapturaMic() {
+            // 5. Iniciar a Captura do Microfone (Nativo ou Web)
+            async function iniciarCapturaMic() {
                 if (!modoEscutaAtivo || estaFalando) return;
 
-                try {
-                    reconhecimento.start();
-                    console.log("📱 Microfone ativo e escutando no Android...");
-                } catch (erro) {
-                    // No Android, se o microfone já estiver ativo, ignoramos o erro 'InvalidStateError'
-                    if (erro.name !== 'InvalidStateError') {
-                        console.error("Erro ao iniciar microfone no Android:", erro);
+                if (isNativo && SpeechRecognitionNativo) {
+                    try {
+                        const perm = await SpeechRecognitionNativo.checkPermissions();
+                        if (perm.speechRecognition !== 'granted') {
+                            await SpeechRecognitionNativo.requestPermissions();
+                        }
+
+                        // Dá o play no microfone do Android silenciosamente
+                        await SpeechRecognitionNativo.start({
+                            language: "pt-BR",
+                            partialResults: true,
+                            popup: false // Esconde a janela do Google!
+                        });
+                        console.log("📱 Microfone Nativo ativado e escutando!");
+                    } catch (erro) {
+                        console.warn("Aviso do mic nativo, reiniciando:", erro);
+                        if (modoEscutaAtivo && !microfonePausadoPeloSistema) {
+                            setTimeout(iniciarCapturaMic, 500);
+                        }
+                    }
+                } else if (reconhecimento) {
+                    try {
+                        reconhecimento.start();
+                        console.log("💻 Microfone Web ativo.");
+                    } catch (erro) {
+                        if (erro.name !== 'InvalidStateError') {
+                            console.error("Erro no mic web:", erro);
+                        }
                     }
                 }
             }
 
             // 6. Normalização de texto
             function normalizarTexto(texto) {
-                return texto
-                    .toLowerCase()
-                    .normalize('NFD')
-                    .replace(/[\u0300-\u036f]/g, '');
+                return texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
             }
 
             const variacoesAluizio = ['aluizio', 'aluisio', 'aloizio', 'aloisio', 'luizio', 'luis', 'luiz'];
@@ -1622,21 +1575,16 @@
                     const eAluizio = variacoesAluizio.some(v => textoSemAcento.includes(v));
                     const eLucas = variacoesLucas.some(v => textoSemAcento.includes(v));
 
-                    if (eAluizio) {
-                        dadosVoz.barbeiro = "Aluizio";
-                    } else if (eLucas) {
-                        dadosVoz.barbeiro = "Lucas Borges";
-                    }
+                    if (eAluizio) { dadosVoz.barbeiro = "Aluizio"; } 
+                    else if (eLucas) { dadosVoz.barbeiro = "Lucas Borges"; }
                 }
 
                 if (!dadosVoz.horario) {
                     const regexHora = /(\b\d{1,2}\b)\s*(:|e|horas|hora|h)?\s*(\b\d{2}\b)?/;
                     const match = textoOriginal.match(regexHora);
-                    
                     if (match) {
                         let hNum = parseInt(match[1]);
                         let mStr = match[3] || "00";
-                        
                         if (hNum >= 7 && hNum <= 21) {
                             dadosVoz.horario = `${hNum.toString().padStart(2, '0')}:${mStr.padStart(2, '0')}`;
                         }
@@ -1645,23 +1593,19 @@
 
                 if (!dadosVoz.nome && textoOriginal.includes("agendar")) {
                     let depoisDeAgendar = textoOriginal.split("agendar")[1] || "";
-                    
                     const delimitadores = [" às ", " as ", " para ", " com ", " no ", " na ", " 0", " 1", " 2", " 3", " 4", " 5", " 6", " 7", " 8", " 9"];
                     let menorIndice = depoisDeAgendar.length;
 
                     delimitadores.forEach(d => {
                         let idx = depoisDeAgendar.indexOf(d);
-                        if (idx !== -1 && idx < menorIndice) {
-                            menorIndice = idx;
-                        }
+                        if (idx !== -1 && idx < menorIndice) { menorIndice = idx; }
                     });
 
                     let nomeBruto = depoisDeAgendar.substring(0, menorIndice).trim();
                     if (nomeBruto.length > 0) {
                         dadosVoz.nome = nomeBruto.charAt(0).toUpperCase() + nomeBruto.slice(1);
                     }
-                } 
-                else if (!dadosVoz.nome && !textoOriginal.includes("agendar")) {
+                } else if (!dadosVoz.nome && !textoOriginal.includes("agendar")) {
                     const temBarbeiro = variacoesAluizio.some(v => textoSemAcento.includes(v)) || variacoesLucas.some(v => textoSemAcento.includes(v));
                     if (!temBarbeiro && !/\d/.test(textoOriginal)) {
                         dadosVoz.nome = textoOriginal.charAt(0).toUpperCase() + textoOriginal.slice(1);
@@ -1675,71 +1619,78 @@
                     falar("Qual é o nome do cliente?", () => iniciarCapturaMic());
                     return;
                 }
-
                 if (!dadosVoz.horario) {
                     falar(`Entendi, agendar ${dadosVoz.nome}. Qual é o horário?`, () => iniciarCapturaMic());
                     return;
                 }
-
                 if (!dadosVoz.barbeiro) {
                     falar(`Horário ${dadosVoz.horario}. Qual o barbeiro? Lucas ou Aluizio?`, () => iniciarCapturaMic());
                     return;
                 }
-
                 executarAgendamentoFinal();
             }
 
-            // 9. Processamento da Voz Capturada (Evento Principal)
-            // Evento acionado sempre que o navegador captura algum som de voz
-            reconhecimento.onresult = (evento) => {
-                // Captura a transcrição do áudio
-                const textoDito = evento.results[evento.results.length - 1][0].transcript.trim();
-                
-                // LOG DE TESTE: Exibe no console exatamente o que o microfone ouviu
-                console.log("🟢 [TESTE DE VOZ] O microfone escutou:", textoDito);
-
+            // 9. FUNÇÃO CENTRAL DE PROCESSAMENTO DA VOZ 
+            // Unificamos aqui para servir tanto para o Capacitor quanto para Web
+            function processarVoz(textoDito) {
+                console.log("🟢 [VOZ CAPTURADA]:", textoDito);
                 const textoNormalizado = normalizarTexto(textoDito);
 
-                // FASE 1: Verifica se a palavra de ativação "Ney" foi dita
                 if (aguardandoWakeWord) {
                     const falouNey = variacoesNey.some(v => textoNormalizado.includes(v));
 
                     if (falouNey) {
-                        console.log("🎯 Palavra 'Ney' detectada com sucesso!");
+                        console.log("🎯 Palavra 'Ney' detectada!");
                         aguardandoWakeWord = false;
 
                         let comandoSemNey = textoNormalizado;
-                        variacoesNey.forEach(v => {
-                            comandoSemNey = comandoSemNey.replace(v, '').trim();
-                        });
+                        variacoesNey.forEach(v => { comandoSemNey = comandoSemNey.replace(v, '').trim(); });
 
                         if (comandoSemNey.length < 3) {
                             atualizarIndicador("👂 Ney ouvindo... Pode falar!", "ouvindo");
-                            falar("Pois não? Como posso ajudar?", () => {
-                                iniciarCapturaMic();
-                            });
+                            falar("Pois não? Como posso ajudar?", () => iniciarCapturaMic());
                         } else {
                             atualizarIndicador("👂 Processando...", "ouvindo");
                             extrairInformacoes(textoDito);
                             avaliarEAvancar();
                         }
-                    } else {
-                        console.log("⏳ Áudio recebido, mas a palavra 'Ney' não foi identificada.");
                     }
-                    return;
+                } else {
+                    extrairInformacoes(textoDito);
+                    avaliarEAvancar();
                 }
+            }
 
-                // FASE 2: Processamento após ativação
-                extrairInformacoes(textoDito);
-                avaliarEAvancar();
-            };
+            // 10. SETUP DOS ESCUTADORES DE EVENTOS (NATIVO vs WEB)
+            if (isNativo && SpeechRecognitionNativo) {
+                // Escutador Nativo Capacitor
+                SpeechRecognitionNativo.addListener("partialResults", (data) => {
+                    if(data.matches && data.matches.length > 0) {
+                        processarVoz(data.matches[0].trim());
+                    }
+                });
+            } else if (reconhecimento) {
+                // Escutador Web
+                reconhecimento.onresult = (evento) => {
+                    const textoDito = evento.results[evento.results.length - 1][0].transcript.trim();
+                    processarVoz(textoDito);
+                };
 
-            // 10. Envio ao Backend e Finalização
+                reconhecimento.onend = () => {
+                    if (modoEscutaAtivo && !microfonePausadoPeloSistema && !estaFalando) {
+                        setTimeout(() => { iniciarCapturaMic(); }, 500);
+                    }
+                };
+
+                reconhecimento.onerror = (e) => {
+                    console.warn("Aviso do reconhecimento de voz web:", e.error);
+                };
+            }
+
+            // 11. Envio ao Backend e Finalização
             function executarAgendamentoFinal() {
                 const elemData = document.getElementById('dataSelecionada');
-                if (elemData) {
-                    dadosVoz.data = elemData.value;
-                }
+                if (elemData) { dadosVoz.data = elemData.value; }
 
                 falar(`Agendando ${dadosVoz.nome} às ${dadosVoz.horario} com ${dadosVoz.barbeiro}. Aguarde...`);
 
@@ -1768,37 +1719,19 @@
                 estaFalando = false;
                 resetarDados();
                 atualizarIndicador("🎙️ Toque para ativar o Assistente de Voz", "pronto");
-                if (typeof buscarOcupados === 'function') {
-                    buscarOcupados();
-                }
+                if (typeof buscarOcupados === 'function') { buscarOcupados(); }
             }
 
-            // 11. Eventos do Microfone e Segundo Plano
-            reconhecimento.onend = () => {
-                if (modoEscutaAtivo && !microfonePausadoPeloSistema && !estaFalando) {
-                    // Um pequeno delay de 200ms evita que o Android bloqueie restart rápido de áudio
-                    setTimeout(() => {
-                        iniciarCapturaMic();
-                    }, 200);
-                }
-            };
-
-            reconhecimento.onerror = (e) => {
-                console.warn("Aviso do reconhecimento de voz no Android:", e.error);
-
-                // Erros de ausência de fala ('no-speech') ou problemas de conexão temporária ('network')
-                if ((e.error === 'no-speech' || e.error === 'network') && modoEscutaAtivo && !microfonePausadoPeloSistema && !estaFalando) {
-                    setTimeout(() => {
-                        iniciarCapturaMic();
-                    }, 300);
-                }
-            };
-
+            // 12. Gestão de Segundo Plano
             document.addEventListener("visibilitychange", () => {
                 if (document.hidden) {
                     if (modoEscutaAtivo) {
                         microfonePausadoPeloSistema = true;
-                        try { reconhecimento.stop(); } catch (e) {}
+                        if (isNativo && SpeechRecognitionNativo) {
+                            try { SpeechRecognitionNativo.stop(); } catch(e){}
+                        } else if (reconhecimento) {
+                            try { reconhecimento.stop(); } catch (e) {}
+                        }
                     }
                 } else {
                     if (modoEscutaAtivo && microfonePausadoPeloSistema) {
@@ -1813,8 +1746,9 @@
             if (elemIndicador) {
                 elemIndicador.addEventListener('click', alternarEscutaVoz);
             }
+
         } else {
-            console.warn("Reconhecimento de voz não suportado neste navegador.");
+            console.warn("Reconhecimento de voz não suportado.");
         }
 
         document.addEventListener('DOMContentLoaded', () => {
