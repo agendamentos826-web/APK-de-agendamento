@@ -1452,15 +1452,11 @@
         const SpeechRecognitionWeb = window.SpeechRecognition || window.webkitSpeechRecognition;
         let reconhecimentoWeb = null;
 
-        // --- 1. PROCESSAMENTO INTELIGENTE DE VOZ (COM FORÇA DE PARAGEM) ---
-        function processarComandoVoz(textoReconhecido) {
-            if (!textoReconhecido || textoReconhecido.trim() === "") {
-                return; 
-            }
-
-            if (isProcessingCommand || window.speechSynthesis?.speaking) {
-                return;
-            }
+        // --- 1. PROCESSAMENTO INTELIGENTE DE VOZ (SEQUÊNCIA SEGURA E ASSÍNCRONA) ---
+        async function processarComandoVoz(textoReconhecido) {
+            // Filtros de segurança e ruído
+            if (!textoReconhecido || textoReconhecido.trim() === "") return;
+            if (isProcessingCommand || window.speechSynthesis?.speaking) return;
 
             const textoLimpo = textoReconhecido
                 .toLowerCase()
@@ -1469,12 +1465,9 @@
                 .replace(/[.,?!]/g, '')
                 .trim();
 
-            if (textoLimpo.length < 2 && !esperandoResposta) {
-                return;
-            }
+            if (textoLimpo.length < 2 && !esperandoResposta) return;
 
             const variacoesNey = ['ney', 'nei', 'néi', 'nem', 'meio', 'ley', 'hey'];
-            
             let ativou = false;
             let comando = textoLimpo;
 
@@ -1492,27 +1485,30 @@
                 }
             }
 
-            // 4. AÇÃO: Se ativou, paramos o microfone atual IMEDIATAMENTE antes de continuar
+            // 4. AÇÃO: Sequência Segura de Desligamento e Processamento
             if (ativou) {
+                // Bloqueia novas entradas imediatamente para evitar duplicações
                 isProcessingCommand = true;
                 
-                // TRUQUE NOVO: Forçamos o encerramento da escuta ativa do Android.
-                // Isso evita que o hardware fique "preso" e garante que o próximo start() funcione.
-                const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
-                if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
-                    window.Capacitor.Plugins.SpeechRecognition.stop().catch(e => {
-                        console.log("Ignorando aviso interno de stop:", e);
-                    });
+                try {
+                    // PARAGEM SUAVE: O 'await' obriga o código a esperar que o ícone verde
+                    // do Android desapareça naturalmente antes de o assistente tentar falar.
+                    const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
+                    if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
+                        await window.Capacitor.Plugins.SpeechRecognition.stop();
+                    }
+                } catch (erro) {
+                    console.log("Erro silencioso ao parar o mic:", erro);
                 }
 
-                // Agora extraímos as informações em segurança
+                // Agora que o hardware está seguro e fechado, extraímos a informação
                 extrairInformacoes(comando);
                 
-                // Mantemos o respiro de 400ms para o telemóvel processar a paragem 
-                // antes de começar a falar e fazer a próxima avaliação.
+                // Damos apenas 500ms de respiro para garantir a estabilidade 
+                // e avançamos para a pergunta ou conclusão
                 setTimeout(() => {
                     avaliarEAvancar();
-                }, 400);
+                }, 500);
             }
         }
 
