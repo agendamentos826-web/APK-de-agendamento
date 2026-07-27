@@ -1606,26 +1606,24 @@
         }
 
         // --- 3. GESTÃO DO HARDWARE DO MICROFONE ---
-        // ==============================================================================
+        // =============================================================================
         async function pararMicrofoneNativo() {
             const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
             
             if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
                 try { 
-                    // Removemos o 'await' da chamada nativa.
-                    // A aplicação apenas envia a ordem de paragem, mas não fica bloqueada
-                    // à espera que o Android responda, prevenindo o congelamento crónico.
+                    // Dispara a ordem de paragem de forma assíncrona, evitando que o Android trave a app
                     window.Capacitor.Plugins.SpeechRecognition.stop().catch(e => {
-                        console.warn("Ignorado erro interno ao parar o mic:", e);
+                        console.warn("Aviso interno ao parar o mic:", e);
                     });
                 } catch(e) {
-                    console.warn("Erro ao enviar ordem de paragem:", e);
+                    console.warn("Erro ao tentar parar o mic:", e);
                 }
             } else if (typeof reconhecimentoWeb !== 'undefined' && reconhecimentoWeb) {
                 try { reconhecimentoWeb.abort(); } catch(e){}
             }
             
-            // Pausa de segurança de 300ms garantida para o hardware desocupar a memória
+            // Pausa de segurança de 300ms para libertação de memória do hardware
             await new Promise(r => setTimeout(r, 300));
         }
 
@@ -1639,11 +1637,10 @@
             isListeningLock = true;
             const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
 
-            alert("Passo 6: Entrou na função do microfone. É nativo? " + isNativo);
-
             try {
                 if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
                     
+                    // Regista o ouvinte de resultados parciais apenas uma vez
                     if (!ouvinteCapacitorAdicionado) {
                         window.Capacitor.Plugins.SpeechRecognition.addListener('partialResults', (data) => {
                             if (data.matches && data.matches.length > 0) {
@@ -1653,29 +1650,39 @@
                         ouvinteCapacitorAdicionado = true;
                     }
 
-                    alert("Passo 7: A enviar ordem para o Android iniciar a escuta...");
-
-                    // Temporizador de sobrevivência para a ativação do microfone (3 segundos)
-                    const promessaIniciar = window.Capacitor.Plugins.SpeechRecognition.start({
+                    // Ativa a escuta nativa no Android
+                    await window.Capacitor.Plugins.SpeechRecognition.start({
                         language: "pt-BR",
                         maxResults: 2,
                         prompt: "", 
                         partialResults: true,
                         popup: false 
                     });
-
-                    const timeoutSeguranca = new Promise((_, rejeitar) => 
-                        setTimeout(() => rejeitar(new Error("O Android ignorou o pedido de microfone (Timeout).")), 3000)
-                    );
-
-                    // Tenta iniciar; se demorar mais de 3s, o timeoutSeguranca dispara o erro!
-                    await Promise.race([promessaIniciar, timeoutSeguranca]);
-
-                    alert("Passo 8: SUCESSO! O microfone está ligado!");
                     
-                } 
+                } else if (typeof SpeechRecognitionWeb !== 'undefined' && SpeechRecognitionWeb) {
+                    // Suporte para navegadores de computador (Fallback)
+                    if (!reconhecimentoWeb) {
+                        reconhecimentoWeb = new SpeechRecognitionWeb();
+                        reconhecimentoWeb.lang = 'pt-BR';
+                        reconhecimentoWeb.continuous = false;
+                        reconhecimentoWeb.interimResults = true;
+
+                        reconhecimentoWeb.onresult = (evento) => {
+                            const textoDito = evento.results[evento.results.length - 1][0].transcript;
+                            processarComandoVoz(textoDito);
+                        };
+
+                        reconhecimentoWeb.onend = () => {
+                            isListeningLock = false;
+                            if (modoEscutaAtivo && !microfonePausadoPeloSistema) {
+                                setTimeout(() => iniciarCapturaMic(), 300);
+                            }
+                        };
+                    }
+                    reconhecimentoWeb.start();
+                }
             } catch (erro) {
-                alert("Passo de ERRO: A ativação falhou com a mensagem: " + erro.message);
+                console.error("Erro ao iniciar captura de voz:", erro);
                 modoEscutaAtivo = false;
                 atualizarIndicador("❌ Erro ao ativar mic.", "pronto");
             } finally { 
@@ -1745,22 +1752,23 @@
         async function alternarEscutaVoz() {
             if (bloqueioBotao) return; 
             bloqueioBotao = true; 
-            
-            alert("Passo 1: Botão clicado e bloqueio ativado.");
 
             try {
                 if (modoEscutaAtivo) {
-                    // ... (desligar omitido por agora, o problema está ao ligar)
+                    // --- DESLIGAR MICROFONE ---
                     modoEscutaAtivo = false;
+                    microfonePausadoPeloSistema = false;
+                    isProcessingCommand = false;
+                    resetarDados();
+                    
                     await pararMicrofoneNativo();
                     atualizarIndicador("🎙️ Toque para ativar o Comando", "pronto");
                 } else {
-                    alert("Passo 2: Vamos verificar as permissões.");
+                    // --- LIGAR MICROFONE ---
                     atualizarIndicador("⏳ Verificando permissões...", "ouvindo");
 
+                    // 1. Valida as permissões do sistema
                     const temPermissao = await verificarEPedirPermissao();
-
-                    alert("Passo 3: Verificação concluída. Permissão concedida? " + temPermissao);
 
                     if (!temPermissao) {
                         modoEscutaAtivo = false;
@@ -1768,21 +1776,25 @@
                         return;
                     }
 
+                    // 2. Prepara o estado da aplicação
                     modoEscutaAtivo = true;
                     microfonePausadoPeloSistema = false;
                     isProcessingCommand = false;
+                    resetarDados();
                     
-                    alert("Passo 4: Preparando para ligar o microfone.");
+                    // 3. Garante limpeza prévia do hardware
                     await pararMicrofoneNativo(); 
                     
+                    // 4. Atualiza a interface e inicia a escuta
                     atualizarIndicador("👂 Diga 'Ney' e o comando...", "ouvindo");
-                    
-                    alert("Passo 5: A chamar a função iniciarCapturaMic().");
                     iniciarCapturaMic();
                 }
             } catch (erroGeral) {
-                alert("Erro no botão: " + erroGeral);
+                console.error("Erro ao alternar o estado da voz:", erroGeral);
+                modoEscutaAtivo = false;
+                atualizarIndicador("❌ Erro ao alternar mic.", "pronto");
             } finally {
+                // Libera o botão após 500ms para evitar cliques acidentais seguidos
                 setTimeout(() => { bloqueioBotao = false; }, 500);
             }
         }
