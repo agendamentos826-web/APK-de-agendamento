@@ -1455,21 +1455,21 @@
         }
 
         // --- 2. FUNÇÕES DE SUPORTE VISUAL E DADOS ---
+        // --- FUNÇÃO DE FALAR COM VOZ MASCULINA PARA O NEY ---
         async function falar(texto, callbackAoTerminar) {
-            // Tenta parar o microfone antes de falar para o Ney não ouvir a própria voz
             if (reconhecimentoWeb) { try { reconhecimentoWeb.stop(); } catch (e) {} }
             const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
 
             if (isNativo && window.Capacitor.Plugins.TextToSpeech) {
                 try {
-                    // Usa a voz nativa do Android (Não trava e não precisa de clique)
+                    // === VOZ NATIVA DO ANDROID ===
                     await window.Capacitor.Plugins.TextToSpeech.speak({
                         text: texto,
                         lang: 'pt-BR',
-                        rate: 1.0
+                        rate: 1.0,
+                        pitch: 0.85 // Tom mais grave para soar como voz masculina (Ney)
                     });
                     
-                    // Como usamos await, ele só chega nesta linha quando terminar de falar!
                     if (modoEscutaAtivo && callbackAoTerminar) {
                         callbackAoTerminar();
                     } else if (modoEscutaAtivo) {
@@ -1477,14 +1477,26 @@
                     }
                 } catch (e) {
                     console.error("Erro na voz nativa: ", e);
-                    // Se der erro na voz, não trava o app, volta a ouvir
                     if (modoEscutaAtivo) iniciarCapturaMic();
                 }
             } else {
-                // Motor Web Normal (PC)
+                // === VOZ NA WEB / NAVEGADOR ===
                 const mensagem = new SpeechSynthesisUtterance(texto);
                 mensagem.lang = 'pt-BR';
-                mensagem.rate = 1.08; 
+                mensagem.rate = 1.0;
+                mensagem.pitch = 0.85; // Tom mais grave na Web
+
+                // Procura especificamente por uma voz masculina em pt-BR se disponível
+                const voices = window.speechSynthesis.getVoices();
+                const vozMasculina = voices.find(v => 
+                    v.lang.includes('pt') && 
+                    (v.name.toLowerCase().includes('male') || 
+                     v.name.toLowerCase().includes('masculin') || 
+                     v.name.toLowerCase().includes('lucas') || 
+                     v.name.toLowerCase().includes('daniel') ||
+                     v.name.toLowerCase().includes('felipe'))
+                );
+                if (vozMasculina) mensagem.voice = vozMasculina;
 
                 mensagem.onend = () => {
                     if (modoEscutaAtivo && callbackAoTerminar) {
@@ -1494,7 +1506,6 @@
                     }
                 };
                 
-                // Prevenção de travamento na Web
                 mensagem.onerror = () => {
                     if (modoEscutaAtivo) iniciarCapturaMic();
                 };
