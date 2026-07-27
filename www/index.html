@@ -1431,6 +1431,14 @@
             el.appendChild(linha);
             el.scrollTop = el.scrollHeight;
         }
+
+        function comTimeout(promise, ms, label) {
+            let timer;
+            const timeoutPromise = new Promise((_, reject) => {
+                timer = setTimeout(() => reject(new Error('TIMEOUT_' + label)), ms);
+            });
+            return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
+        }
         
         // ==============================================================================
         // ASSISTENTE DE VOZ INTELIGENTE (REFACTORIZADO PARA CAPACITOR / ANDROID)
@@ -1740,13 +1748,17 @@
 
                     // Ativa a escuta nativa no Android
                     logDebug('Chamando start()...');
-                    await window.Capacitor.Plugins.SpeechRecognition.start({
-                        language: "pt-BR",
-                        maxResults: 2,
-                        prompt: "", 
-                        partialResults: true,
-                        popup: false 
-                    });
+                    await comTimeout(
+                        window.Capacitor.Plugins.SpeechRecognition.start({
+                            language: "pt-BR",
+                            maxResults: 2,
+                            prompt: "", 
+                            partialResults: true,
+                            popup: false 
+                        }),
+                        6000,
+                        'START'
+                    );
                     
                 } else if (typeof SpeechRecognitionWeb !== 'undefined' && SpeechRecognitionWeb) {
                     // Suporte para navegadores de computador (Fallback)
@@ -1771,10 +1783,19 @@
                     reconhecimentoWeb.start();
                 }
             } catch (erro) {
+                const msg = erro?.message || JSON.stringify(erro);
                 console.error("Erro ao iniciar captura de voz:", erro);
-                logDebug('ERRO start(): ' + (erro?.message || JSON.stringify(erro)));
-                modoEscutaAtivo = false;
-                atualizarIndicador("❌ Erro ao ativar mic.", "pronto");
+                logDebug('ERRO start(): ' + msg);
+                isListeningLock = false;
+                if (msg && msg.includes('TIMEOUT_START') && modoEscutaAtivo) {
+                    // O plugin travou sem responder. Força um stop() pra limpar o estado nativo e tenta de novo.
+                    logDebug('Timeout no start() — forçando stop() e tentando de novo...');
+                    try { await window.Capacitor.Plugins.SpeechRecognition.stop(); } catch (e) {}
+                    setTimeout(() => { if (modoEscutaAtivo) iniciarCapturaMic(); }, 500);
+                } else {
+                    modoEscutaAtivo = false;
+                    atualizarIndicador("❌ Erro ao ativar mic.", "pronto");
+                }
             } finally { 
                 isListeningLock = false;
             }
