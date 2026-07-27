@@ -1606,16 +1606,29 @@
         }
 
         // --- 3. GESTÃO DO HARDWARE DO MICROFONE ---
+        // ==============================================================================
         async function pararMicrofoneNativo() {
             const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
+            
             if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
-                try { await window.Capacitor.Plugins.SpeechRecognition.stop(); } catch(e){}
-            } else if (reconhecimentoWeb) {
+                try { 
+                    // Removemos o 'await' da chamada nativa.
+                    // A aplicação apenas envia a ordem de paragem, mas não fica bloqueada
+                    // à espera que o Android responda, prevenindo o congelamento crónico.
+                    window.Capacitor.Plugins.SpeechRecognition.stop().catch(e => {
+                        console.warn("Ignorado erro interno ao parar o mic:", e);
+                    });
+                } catch(e) {
+                    console.warn("Erro ao enviar ordem de paragem:", e);
+                }
+            } else if (typeof reconhecimentoWeb !== 'undefined' && reconhecimentoWeb) {
                 try { reconhecimentoWeb.abort(); } catch(e){}
             }
-            // Tempo de espera para o Android libertar o hardware de áudio
+            
+            // Pausa de segurança de 300ms garantida para o hardware desocupar a memória
             await new Promise(r => setTimeout(r, 300));
         }
+
 
         // ==============================================================================
         // GESTÃO DO HARDWARE DO MICROFONE (COM ALERTAS DE DEPURAÇÃO)
