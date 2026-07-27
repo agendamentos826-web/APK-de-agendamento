@@ -1596,6 +1596,7 @@
                 const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
                 
                 if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
+                    
                     if (!ouvinteCapacitorAdicionado) {
                         window.Capacitor.Plugins.SpeechRecognition.addListener('partialResults', (data) => {
                             if (data.matches && data.matches.length > 0) processarComandoVoz(data.matches[0]);
@@ -1603,32 +1604,37 @@
                         ouvinteCapacitorAdicionado = true;
                     }
 
+                    // Tenta iniciar a gravação
                     await window.Capacitor.Plugins.SpeechRecognition.start({
                         language: "pt-BR",
                         maxResults: 2,
-                        prompt: "Ouvindo...",
+                        prompt: "", // Deixa vazio para ser o mais silencioso possível
                         partialResults: true,
                         popup: false
                     });
+                    
                 } else if (reconhecimentoWeb) {
                     reconhecimentoWeb.start();
                 } else {
-                    atualizarIndicador("🎙️ API de voz indisponível no dispositivo.", "pronto");
                     modoEscutaAtivo = false;
+                    atualizarIndicador("🎙️ API indisponível neste aparelho.", "pronto");
                 }
             } catch (e) {
                 console.error("Erro ao ativar microfone: ", e);
+                
+                // Se der erro, desliga a interface para o usuário tentar de novo
                 modoEscutaAtivo = false;
-                atualizarIndicador("🎙️ Erro no microfone. Toque para tentar de novo.", "pronto");
+                atualizarIndicador("🎙️ Erro. Toque para tentar de novo.", "pronto");
             }
         }
 
         async function alternarEscutaVoz() {
             if (modoEscutaAtivo) {
+                // DESLIGA O ASSISTENTE
                 modoEscutaAtivo = false;
                 microfonePausadoPeloSistema = false;
-                window.speechSynthesis.cancel();
                 
+                try { window.speechSynthesis.cancel(); } catch(e){}
                 if (reconhecimentoWeb) { try { reconhecimentoWeb.stop(); } catch (e) {} }
                 
                 const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
@@ -1638,27 +1644,42 @@
 
                 resetarDados();
                 atualizarIndicador("🎙️ Toque para ativar o Assistente de Voz", "pronto");
+            
             } else {
+                // LIGA O ASSISTENTE
+                
+                // 1. Muda a interface IMEDIATAMENTE (O botão deixa de ser fantasma aqui)
+                modoEscutaAtivo = true;
+                microfonePausadoPeloSistema = false;
+                resetarDados();
+                atualizarIndicador("⏳ Iniciando...", "ouvindo");
+                
+                // 2. Destrava o motor de áudio para não bugar a voz
+                try { 
+                    window.speechSynthesis.speak(new SpeechSynthesisUtterance('')); 
+                } catch(e){}
+
+                // 3. Lida com a permissão do Android
                 const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
                 
                 if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
                     try {
                         const status = await window.Capacitor.Plugins.SpeechRecognition.checkPermissions();
+                        
+                        // Se não tem permissão, pede.
                         if (status.speechRecognition !== 'granted') {
+                            atualizarIndicador("⏳ Aceite a permissão na tela...", "ouvindo");
+                            
+                            // Se o Android bugar e não devolver a resposta, o app para aqui.
+                            // Mas como a permissão já foi dada, o usuário só precisa clicar de novo no botão!
                             await window.Capacitor.Plugins.SpeechRecognition.requestPermissions();
                         }
                     } catch (erroPermissao) {
-                        console.warn("Erro ao solicitar permissão nativa:", erroPermissao);
+                        console.warn("Aviso de permissão:", erroPermissao);
                     }
                 }
 
-                modoEscutaAtivo = true;
-                microfonePausadoPeloSistema = false;
-                resetarDados();
-                
-                const unlock = new SpeechSynthesisUtterance('');
-                window.speechSynthesis.speak(unlock);
-
+                // 4. Inicia a escuta de fato
                 atualizarIndicador("👂 Escuta ligada. Diga 'Ney' e o comando.", "ouvindo");
                 iniciarCapturaMic();
             }
