@@ -1417,26 +1417,6 @@
             });
         }
         
-
-        // 🎧 Conectando o ouvido do App Nativo à sua função de processamento
-        if (isNativo && SpeechRecognitionNativo) {
-            // Limpa ouvintes antigos para não duplicar
-            SpeechRecognitionNativo.removeAllListeners();
-            
-            // Escuta os resultados que vêm do Android
-            SpeechRecognitionNativo.addListener('partialResults', (data) => {
-                if (data.matches && data.matches.length > 0) {
-                    // O plugin pode retornar uma array ou string, garantimos que pegamos o texto
-                    let textoOuvido = Array.isArray(data.matches) ? data.matches[0] : data.matches;
-                    
-                    console.log("🗣️ Ouvido pelo Nativo:", textoOuvido);
-                    
-                    // Aqui enviamos o texto para a mesma função que você já usava na Web!
-                    // (Estou assumindo que o nome da sua função é 'processarVoz')
-                    processarVoz(textoOuvido.toLowerCase()); 
-                }
-            });
-        }
         // ==============================================================================
         // ASSISTENTE DE VOZ INTELIGENTE + GESTÃO DE SEGUNDO PLANO (ESTILO ALEXA)
         // ==============================================================================
@@ -1515,14 +1495,33 @@
                 aguardandoWakeWord = true; 
             }
 
-            // 4. Liga/Desliga o assistente manualmente
+            // ==================================================================
+            // 🎧 1. OUVINTE NATIVO: Conecta o ouvido do App à sua Inteligência
+            // ==================================================================
+            if (isNativo && SpeechRecognitionNativo) {
+                SpeechRecognitionNativo.removeAllListeners();
+                SpeechRecognitionNativo.addListener('partialResults', (data) => {
+                    if (data.matches && data.matches.length > 0) {
+                        let textoOuvido = Array.isArray(data.matches) ? data.matches[0] : data.matches;
+                        console.log("🗣️ Ouvido pelo Nativo:", textoOuvido);
+                        
+                        // ATENÇÃO: Verifica se o nome da sua função que processa o texto é essa mesmo
+                        if (typeof processarVoz === "function") {
+                            processarVoz(textoOuvido.toLowerCase()); 
+                        }
+                    }
+                });
+            }
+
+            // ==================================================================
+            // 🔘 2. FUNÇÃO DO BOTÃO: Liga/Desliga o assistente manualmente
+            // ==================================================================
             async function alternarEscutaVoz() {
                 if (modoEscutaAtivo) {
-                    // DESLIGAR
+                    // Ação de DESLIGAR
                     modoEscutaAtivo = false;
                     microfonePausadoPeloSistema = false;
                     estaFalando = false;
-                    clearInterval(loopEscutaNativa); // <--- MATA O CÃO DE GUARDA AQUI
                     
                     atualizarIndicador("🎙️ Toque para falar o comando", "pronto");
                     resetarDados();
@@ -1534,64 +1533,39 @@
                         try { reconhecimento.stop(); } catch (e) {}
                     }
                 } else {
-                    // LIGAR
+                    // Ação de LIGAR
                     modoEscutaAtivo = true;
                     microfonePausadoPeloSistema = false;
-                    resetarDados();
-                    atualizarIndicador("👂 Aguardando você dizer 'Ney'...", "ouvindo");
+                    estaFalando = false;
+                    
+                    atualizarIndicador("👂 Ney ouvindo... Pode falar!", "ouvindo");
                     iniciarCapturaMic();
                 }
             }
 
-            // 5. Iniciar a Captura do Microfone (Nativo ou Web)
-            // Variável global para o cão de guarda
-            let loopEscutaNativa = null;
-
-            // 5. Iniciar a Captura do Microfone (Nativo ou Web)
+            // ==================================================================
+            // 🎤 3. CAPTURA DO MICROFONE: Motor "Push-to-Talk" Limpo
+            // ==================================================================
             async function iniciarCapturaMic() {
                 if (!modoEscutaAtivo || estaFalando) return;
 
                 if (isNativo && SpeechRecognitionNativo) {
                     try {
-                        // Pede permissão apenas se não tiver
                         const perm = await SpeechRecognitionNativo.checkPermissions();
                         if (perm.speechRecognition !== 'granted') {
                             await SpeechRecognitionNativo.requestPermissions();
                         }
 
-                        // Inicia o microfone nativo
+                        // Inicia o mic com UM único bipe
                         await SpeechRecognitionNativo.start({
                             language: "pt-BR",
                             partialResults: true,
                             popup: false 
                         });
-                        console.log("📱 Microfone Nativo ativado e escutando!");
+                        console.log("📱 Microfone Nativo ativado (Push-to-Talk)!");
                         
-                        // CÃO DE GUARDA: Monitora se o Android derrubou o microfone por silêncio
-                        clearInterval(loopEscutaNativa);
-                        loopEscutaNativa = setInterval(async () => {
-                            if (modoEscutaAtivo && !estaFalando && !microfonePausadoPeloSistema) {
-                                try {
-                                    // Tenta iniciar novamente. Se já estiver rodando, o plugin ignora ou dá erro leve.
-                                    // Se o Android tiver derrubado (bolinha verde sumiu), ele religa.
-                                    await SpeechRecognitionNativo.start({
-                                        language: "pt-BR",
-                                        partialResults: true,
-                                        popup: false
-                                    });
-                                } catch (e) {
-                                    // Erros de loop ignorados silenciosamente
-                                }
-                            } else {
-                                clearInterval(loopEscutaNativa); // Para o monitoramento se desligarmos
-                            }
-                        }, 4000); // Checa a cada 2.5 segundos
-
                     } catch (erro) {
-                        console.warn("Aviso do mic nativo, reiniciando:", erro);
-                        if (modoEscutaAtivo && !microfonePausadoPeloSistema && !estaFalando) {
-                            setTimeout(iniciarCapturaMic, 500);
-                        }
+                        console.error("Erro no mic nativo:", erro);
                     }
                 } else if (reconhecimento) {
                     try {
