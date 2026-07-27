@@ -1700,27 +1700,65 @@
             
             try {
                 if (modoEscutaAtivo) {
-                    // DESLIGANDO
+                    // ==========================================
+                    // DESLIGANDO O MICROFONE
+                    // ==========================================
                     modoEscutaAtivo = false;
                     microfonePausadoPeloSistema = false;
                     resetarDados();
                     atualizarIndicador("🎙️ Toque para ativar o Comando", "pronto");
                     
+                    // CORREÇÃO 1: Cala a boca do Ney imediatamente se ele estiver falando
+                    if (window.speechSynthesis) {
+                        window.speechSynthesis.cancel();
+                    }
+                    
                     const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
                     if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
                         try { await window.Capacitor.Plugins.SpeechRecognition.stop(); } catch(e){}
                     } else if (reconhecimentoWeb) {
-                        try { reconhecimentoWeb.stop(); } catch(e){}
+                        // CORREÇÃO 2: Usar abort() em vez de stop() mata o áudio na raiz e evita "zumbis"
+                        try { reconhecimentoWeb.abort(); } catch(e){}
                     }
                 
                 } else {
-                    // LIGANDO
+                    // ==========================================
+                    // LIGANDO O MICROFONE
+                    // ==========================================
                     modoEscutaAtivo = true;
                     microfonePausadoPeloSistema = false;
                     resetarDados();
                     atualizarIndicador("⏳ Iniciando...", "ouvindo");
                     
                     const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
+                    
+                    // CORREÇÃO 3: Recriar a escuta Web DO ZERO sempre que ligar manualmente
+                    if (!isNativo && SpeechRecognitionWeb) {
+                        try { if (reconhecimentoWeb) reconhecimentoWeb.abort(); } catch(e){}
+                        
+                        reconhecimentoWeb = new SpeechRecognitionWeb();
+                        reconhecimentoWeb.lang = 'pt-BR';
+                        reconhecimentoWeb.continuous = true;
+                        reconhecimentoWeb.interimResults = false;
+
+                        reconhecimentoWeb.onresult = (evento) => {
+                            const textoDito = evento.results[evento.results.length - 1][0].transcript;
+                            processarComandoVoz(textoDito);
+                        };
+
+                        reconhecimentoWeb.onend = () => {
+                            if (modoEscutaAtivo && !microfonePausadoPeloSistema && !window.speechSynthesis.speaking) {
+                                iniciarCapturaMic();
+                            }
+                        };
+
+                        reconhecimentoWeb.onerror = (e) => {
+                            if (e.error === 'no-speech' && modoEscutaAtivo && !microfonePausadoPeloSistema) {
+                                iniciarCapturaMic();
+                            }
+                        };
+                    }
+
                     if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
                         try {
                             const status = await window.Capacitor.Plugins.SpeechRecognition.checkPermissions();
@@ -1734,7 +1772,7 @@
                     iniciarCapturaMic();
                 }
             } finally {
-                // GARANTIA ABSOLUTA: O botão SEMPRE destrava após meio segundo, sem virar fantasma
+                // GARANTIA ABSOLUTA: O botão SEMPRE destrava após meio segundo
                 setTimeout(() => { bloqueioBotao = false; }, 500);
             }
         }
