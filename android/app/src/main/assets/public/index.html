@@ -1416,7 +1416,27 @@
                 navigator.serviceWorker.register('/sw.js').catch(err => console.log('PWA: SW não encontrado.'));
             });
         }
+        
 
+        // 🎧 Conectando o ouvido do App Nativo à sua função de processamento
+        if (isNativo && SpeechRecognitionNativo) {
+            // Limpa ouvintes antigos para não duplicar
+            SpeechRecognitionNativo.removeAllListeners();
+            
+            // Escuta os resultados que vêm do Android
+            SpeechRecognitionNativo.addListener('partialResults', (data) => {
+                if (data.matches && data.matches.length > 0) {
+                    // O plugin pode retornar uma array ou string, garantimos que pegamos o texto
+                    let textoOuvido = Array.isArray(data.matches) ? data.matches[0] : data.matches;
+                    
+                    console.log("🗣️ Ouvido pelo Nativo:", textoOuvido);
+                    
+                    // Aqui enviamos o texto para a mesma função que você já usava na Web!
+                    // (Estou assumindo que o nome da sua função é 'processarVoz')
+                    processarVoz(textoOuvido.toLowerCase()); 
+                }
+            });
+        }
         // ==============================================================================
         // ASSISTENTE DE VOZ INTELIGENTE + GESTÃO DE SEGUNDO PLANO (ESTILO ALEXA)
         // ==============================================================================
@@ -1565,7 +1585,7 @@
                             } else {
                                 clearInterval(loopEscutaNativa); // Para o monitoramento se desligarmos
                             }
-                        }, 2500); // Checa a cada 2.5 segundos
+                        }, 4000); // Checa a cada 2.5 segundos
 
                     } catch (erro) {
                         console.warn("Aviso do mic nativo, reiniciando:", erro);
