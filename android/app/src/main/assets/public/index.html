@@ -1496,24 +1496,6 @@
             }
 
             // ==================================================================
-            // 🎧 1. OUVINTE NATIVO: Conecta o ouvido do App à sua Inteligência
-            // ==================================================================
-            if (isNativo && SpeechRecognitionNativo) {
-                SpeechRecognitionNativo.removeAllListeners();
-                SpeechRecognitionNativo.addListener('partialResults', (data) => {
-                    if (data.matches && data.matches.length > 0) {
-                        let textoOuvido = Array.isArray(data.matches) ? data.matches[0] : data.matches;
-                        console.log("🗣️ Ouvido pelo Nativo:", textoOuvido);
-                        
-                        // ATENÇÃO: Verifica se o nome da sua função que processa o texto é essa mesmo
-                        if (typeof processarVoz === "function") {
-                            processarVoz(textoOuvido.toLowerCase()); 
-                        }
-                    }
-                });
-            }
-
-            // ==================================================================
             // 🔘 2. FUNÇÃO DO BOTÃO: Liga/Desliga o assistente manualmente
             // ==================================================================
             async function alternarEscutaVoz() {
@@ -1653,26 +1635,31 @@
 
             // 9. FUNÇÃO CENTRAL DE PROCESSAMENTO DA VOZ 
             // Unificamos aqui para servir tanto para o Capacitor quanto para Web
+            // 9. FUNÇÃO CENTRAL DE PROCESSAMENTO DA VOZ 
             function processarVoz(textoDito) {
                 console.log("🟢 [VOZ CAPTURADA]:", textoDito);
                 const textoNormalizado = normalizarTexto(textoDito);
 
                 if (aguardandoWakeWord) {
-                    const falouNey = variacoesNey.some(v => textoNormalizado.includes(v));
+                    // Usamos Regex \b para garantir que ele só reaja à palavra EXATA, e não a pedaços de palavras (ex: 'telefone')
+                    const regexWakeWord = /\b(ney|nei|nay|nej|né|ne)\b/i;
+                    const falouNey = regexWakeWord.test(textoNormalizado);
 
                     if (falouNey) {
                         console.log("🎯 Palavra 'Ney' detectada!");
                         aguardandoWakeWord = false;
 
-                        let comandoSemNey = textoNormalizado;
-                        variacoesNey.forEach(v => { comandoSemNey = comandoSemNey.replace(v, '').trim(); });
+                        // Limpa o Wake Word da frase sem destruir o resto do texto
+                        let comandoSemNey = textoNormalizado.replace(regexWakeWord, '').trim();
 
                         if (comandoSemNey.length < 3) {
+                            // Usuário disse apenas "Ney"
                             atualizarIndicador("👂 Ney ouvindo... Pode falar!", "ouvindo");
                             falar("Pois não? Como posso ajudar?", () => iniciarCapturaMic());
                         } else {
+                            // Usuário falou tudo junto (ex: "Ney agendar o Lucas")
                             atualizarIndicador("👂 Processando...", "ouvindo");
-                            extrairInformacoes(textoDito);
+                            extrairInformacoes(comandoSemNey); // Extraímos da frase limpa
                             avaliarEAvancar();
                         }
                     }
@@ -1684,10 +1671,13 @@
 
             // 10. SETUP DOS ESCUTADORES DE EVENTOS (NATIVO vs WEB)
             if (isNativo && SpeechRecognitionNativo) {
+                // Limpa ouvintes antigos para evitar chamadas fantasmas em segundo plano
+                SpeechRecognitionNativo.removeAllListeners();
                 // Escutador Nativo Capacitor
                 SpeechRecognitionNativo.addListener("partialResults", (data) => {
                     if(data.matches && data.matches.length > 0) {
-                        processarVoz(data.matches[0].trim());
+                        let textoOuvido = Array.isArray(data.matches) ? data.matches[0] : data.matches;
+                        processarVoz(textoOuvido.trim());
                     }
                 });
             } else if (reconhecimento) {
