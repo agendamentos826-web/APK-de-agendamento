@@ -1539,28 +1539,38 @@
 
                 if (isNativo && SpeechRecognitionNativo) {
                     try {
+                        alert("Passo 1: Verificando permissões nativas...");
                         const perm = await SpeechRecognitionNativo.checkPermissions();
+                        alert("Passo 2: Status da permissão = " + perm.speechRecognition);
+                        
                         if (perm.speechRecognition !== 'granted') {
-                            await SpeechRecognitionNativo.requestPermissions();
+                            alert("Passo 3: Pedindo permissão ao usuário...");
+                            const req = await SpeechRecognitionNativo.requestPermissions();
+                            alert("Passo 4: Resposta do usuário = " + req.speechRecognition);
+                            
+                            if (req.speechRecognition !== 'granted') {
+                                alert("❌ Permissão negada! O app não pode ouvir.");
+                                return;
+                            }
                         }
 
-                        // Dá o play no microfone do Android silenciosamente
+                        alert("Passo 5: Tudo certo! Ligando motor do microfone...");
                         await SpeechRecognitionNativo.start({
                             language: "pt-BR",
                             partialResults: true,
-                            popup: false // Esconde a janela do Google!
+                            popup: false 
                         });
-                        console.log("📱 Microfone Nativo ativado e escutando!");
+                        
+                        alert("✅ Passo 6: Microfone nativo ligado com sucesso (sem erros no código)!");
+                        
                     } catch (erro) {
-                        console.warn("Aviso do mic nativo, reiniciando:", erro);
-                        if (modoEscutaAtivo && !microfonePausadoPeloSistema) {
-                            setTimeout(iniciarCapturaMic, 500);
-                        }
+                        // Se o motor do Google não existir ou der falha nativa, cai aqui
+                        alert("❌ ERRO FATAL NO PLUGIN: " + JSON.stringify(erro));
+                        console.error("Erro detalhado:", erro);
                     }
                 } else if (reconhecimento) {
                     try {
                         reconhecimento.start();
-                        console.log("💻 Microfone Web ativo.");
                     } catch (erro) {
                         if (erro.name !== 'InvalidStateError') {
                             console.error("Erro no mic web:", erro);
