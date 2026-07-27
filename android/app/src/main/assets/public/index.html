@@ -1617,8 +1617,10 @@
             await new Promise(r => setTimeout(r, 300));
         }
 
+        // ==============================================================================
+        // GESTÃO DO HARDWARE DO MICROFONE (COM ALERTAS DE DEPURAÇÃO)
+        // ==============================================================================
         async function iniciarCapturaMic() {
-            // Bloqueio de segurança: impede múltiplas instâncias do microfone em paralelo
             if (!modoEscutaAtivo || microfonePausadoPeloSistema || isListeningLock) return;
             
             isListeningLock = true;
@@ -1626,6 +1628,7 @@
 
             try {
                 if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
+                    
                     if (!ouvinteCapacitorAdicionado) {
                         window.Capacitor.Plugins.SpeechRecognition.addListener('partialResults', (data) => {
                             if (data.matches && data.matches.length > 0) {
@@ -1635,7 +1638,7 @@
                         ouvinteCapacitorAdicionado = true;
                     }
 
-                    // Inicia a captura nativa do Android
+                    // Tenta iniciar o microfone nativo
                     await window.Capacitor.Plugins.SpeechRecognition.start({
                         language: "pt-BR",
                         maxResults: 2,
@@ -1645,6 +1648,7 @@
                     });
                     
                 } else if (SpeechRecognitionWeb) {
+                    // [Código Web mantém-se igual]
                     if (!reconhecimentoWeb) {
                         reconhecimentoWeb = new SpeechRecognitionWeb();
                         reconhecimentoWeb.lang = 'pt-BR';
@@ -1665,11 +1669,15 @@
                     }
                     reconhecimentoWeb.start();
                 }
-            } catch (e) {
-                console.log("Aviso/Erro no Mic:", e);
-            } finally {
+            } catch (erro) {
+                // RASTREADOR: Vai mostrar uma janela no telemóvel com o erro exato!
+                alert("Erro ao iniciar microfone: " + JSON.stringify(erro));
+                console.error("Aviso/Erro no Mic:", erro);
+                
+                modoEscutaAtivo = false;
+                atualizarIndicador("❌ Erro interno no Mic.", "pronto");
+            } finally { 
                 isListeningLock = false;
-                // Se o microfone parou por tempo limite (silêncio), religa com segurança
                 if (modoEscutaAtivo && !microfonePausadoPeloSistema && !isProcessingCommand) {
                     setTimeout(() => iniciarCapturaMic(), 400);
                 }

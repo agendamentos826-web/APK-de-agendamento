@@ -7,6 +7,11 @@
     <!-- INÍCIO: Permissões de Áudio e Microfone -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
     <uses-permission android:name="android.permission.INTERNET" />
     
     <!-- Impede que o sistema desligue o processador de áudio em segundo plano -->
