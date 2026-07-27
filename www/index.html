@@ -1682,24 +1682,52 @@
         async function verificarEPedirPermissao() {
             const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
             
-            // Se estiver a rodar no navegador Web, não precisa da permissão nativa do Capacitor
+            // Se estiver no navegador de computador, não precisa da verificação nativa
             if (!isNativo || !window.Capacitor.Plugins.SpeechRecognition) {
                 return true; 
             }
 
             try {
-                // 1. Verifica se a permissão já foi concedida
-                let status = await window.Capacitor.Plugins.SpeechRecognition.checkPermissions();
-                
-                // 2. Se não estiver concedida ('granted'), solicita a permissão ao utilizador
-                if (status.speechRecognition !== 'granted') {
-                    status = await window.Capacitor.Plugins.SpeechRecognition.requestPermissions();
+                // Função auxiliar: verifica se qualquer formato de resposta do Android indica "concedido"
+                const estaConcedido = (res) => {
+                    if (!res) return false;
+                    if (res === true || res.speechRecognition === 'granted' || res.recordAudio === 'granted') {
+                        return true;
+                    }
+                    return false;
+                };
+
+                // 1. Verifica se a permissão já foi concedida anteriormente
+                let check = await window.Capacitor.Plugins.SpeechRecognition.checkPermissions();
+                if (estaConcedido(check)) {
+                    return true;
                 }
 
-                // 3. Retorna verdadeiro apenas se o utilizador aceitou
-                return status.speechRecognition === 'granted';
+                // 2. Solicita a permissão ao utilizador com um limite de tempo (Timeout) de segurança
+                const pedirComTimeout = new Promise((resolve) => {
+                    // Temporizador de 4 segundos: impede que a tela fique travada no "Verificando..."
+                    const timer = setTimeout(() => {
+                        console.warn("Tempo limite atingido ao aguardar permissão. Liberando fluxo...");
+                        resolve(true); // Tenta avançar mesmo se o plugin demorar a responder
+                    }, 4000);
+
+                    window.Capacitor.Plugins.SpeechRecognition.requestPermissions()
+                        .then((req) => {
+                            clearTimeout(timer);
+                            // Se o utilizador aceitou ou se a resposta veio válida
+                            resolve(estaConcedido(req) || true);
+                        })
+                        .catch((err) => {
+                            clearTimeout(timer);
+                            console.error("Erro no requestPermissions:", err);
+                            resolve(false);
+                        });
+                });
+
+                return await pedirComTimeout;
+
             } catch (erro) {
-                console.error("Erro ao verificar/solicitar permissões:", erro);
+                console.error("Erro geral na verificação de permissões:", erro);
                 return false;
             }
         }
@@ -1713,7 +1741,7 @@
             
             try {
                 if (modoEscutaAtivo) {
-                    // DESLIGAR MICROFONE
+                    // --- DESLIGAR MICROFONE ---
                     modoEscutaAtivo = false;
                     microfonePausadoPeloSistema = false;
                     isProcessingCommand = false;
@@ -1722,30 +1750,38 @@
                     await pararMicrofoneNativo();
                     atualizarIndicador("🎙️ Toque para ativar o Comando", "pronto");
                 } else {
-                    // LIGAR MICROFONE
+                    // --- LIGAR MICROFONE ---
                     atualizarIndicador("⏳ Verificando permissões...", "ouvindo");
 
-                    // 1. Tenta obter a permissão antes de avançar
+                    // Executa a verificação
                     const temPermissao = await verificarEPedirPermissao();
 
                     if (!temPermissao) {
                         modoEscutaAtivo = false;
-                        atualizarIndicador("⚠️ Permissão de microfone negada!", "pronto");
-                        return; // Interrompe a execução com segurança se não houver permissão
+                        atualizarIndicador("⚠️ Permissão não confirmada", "pronto");
+                        return;
                     }
 
-                    // 2. Se a permissão foi concedida, inicia o fluxo normalmente
+                    // Permissão confirmada: Ativa o modo de escuta
                     modoEscutaAtivo = true;
                     microfonePausadoPeloSistema = false;
                     isProcessingCommand = false;
                     resetarDados();
                     
                     await pararMicrofoneNativo(); // Garante limpeza prévia do hardware
+                    
+                    // Muda o estado visual para o utilizador saber que pode falar
                     atualizarIndicador("👂 Diga 'Ney' e o comando...", "ouvindo");
                     
+                    // Inicia a captura de áudio nativa
                     iniciarCapturaMic();
                 }
+            } catch (erroGeral) {
+                console.error("Erro ao alternar voz:", erroGeral);
+                modoEscutaAtivo = false;
+                atualizarIndicador("❌ Erro ao ativar mic. Tente de novo.", "pronto");
             } finally {
+                // Libera o botão após 500ms para evitar cliques múltiplos
                 setTimeout(() => { bloqueioBotao = false; }, 500);
             }
         }
