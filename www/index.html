@@ -1452,14 +1452,12 @@
         const SpeechRecognitionWeb = window.SpeechRecognition || window.webkitSpeechRecognition;
         let reconhecimentoWeb = null;
 
-        // --- 1. PROCESSAMENTO INTELIGENTE DE VOZ (COM FILTRO DE RUÍDO) ---
+        // --- 1. PROCESSAMENTO INTELIGENTE DE VOZ (COM FORÇA DE PARAGEM) ---
         function processarComandoVoz(textoReconhecido) {
-            // 1. FILTRO DE RUÍDO: Se estiver vazio, for nulo, ou for só ruído, ignora e sai.
             if (!textoReconhecido || textoReconhecido.trim() === "") {
                 return; 
             }
 
-            // 2. SEGURANÇA: Se já está a processar algo ou a falar, ignora.
             if (isProcessingCommand || window.speechSynthesis?.speaking) {
                 return;
             }
@@ -1471,7 +1469,6 @@
                 .replace(/[.,?!]/g, '')
                 .trim();
 
-            // 3. FILTRO DE TAMANHO: Ignora sons curtos (ex: "a", "eh") se não estiver esperando resposta
             if (textoLimpo.length < 2 && !esperandoResposta) {
                 return;
             }
@@ -1482,28 +1479,40 @@
             let comando = textoLimpo;
 
             if (esperandoResposta) {
-                // Aceita imediatamente a resposta do utilizador (ex: o nome "Carlos")
                 ativou = true;
                 comando = textoLimpo;
-                esperandoResposta = false; // Desliga o modo resposta
+                esperandoResposta = false; 
             } else {
-                // Procura a palavra mágica
                 for (let v of variacoesNey) {
                     if (textoLimpo.includes(v)) {
                         ativou = true;
-                        // Remove a palavra "Ney" para sobrar só o comando real
                         comando = textoLimpo.replace(new RegExp(`\\b${v}\\b`, 'g'), '').trim();
                         break;
                     }
                 }
             }
 
-            // 4. AÇÃO: Se ativou (ouviu Ney ou era resposta), avança!
-            // Se NÃO ativou, o código morre aqui em silêncio e o microfone continua a ouvir.
+            // 4. AÇÃO: Se ativou, paramos o microfone atual IMEDIATAMENTE antes de continuar
             if (ativou) {
                 isProcessingCommand = true;
+                
+                // TRUQUE NOVO: Forçamos o encerramento da escuta ativa do Android.
+                // Isso evita que o hardware fique "preso" e garante que o próximo start() funcione.
+                const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
+                if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
+                    window.Capacitor.Plugins.SpeechRecognition.stop().catch(e => {
+                        console.log("Ignorando aviso interno de stop:", e);
+                    });
+                }
+
+                // Agora extraímos as informações em segurança
                 extrairInformacoes(comando);
-                avaliarEAvancar();
+                
+                // Mantemos o respiro de 400ms para o telemóvel processar a paragem 
+                // antes de começar a falar e fazer a próxima avaliação.
+                setTimeout(() => {
+                    avaliarEAvancar();
+                }, 400);
             }
         }
 
