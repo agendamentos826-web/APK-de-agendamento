@@ -1587,25 +1587,27 @@
         }
 
         // ==============================================================================
-        // 3. REATIVAÇÃO AUTOMÁTICA DO MICROFONE (COM ATRASO DE SEGURANÇA)
+        // 3. REATIVAÇÃO AUTOMÁTICA DO MICROFONE (ESTRATÉGIA DE REINÍCIO FORÇADO)
         // ==============================================================================
-        // ==============================================================================
-        // 3. REATIVAÇÃO AUTOMÁTICA DO MICROFONE (COM ATRASO DE SEGURANÇA)
-        // ==============================================================================
-        function liberarEContinuarEscuta() {
-            // Libera o bloqueio de comando para que o sistema aceite novas palavras
+        async function liberarEContinuarEscuta() {
+            // Libera o bloqueio de comando
             isProcessingCommand = false;
             
-            // Se o botão principal de escuta ainda estiver ligado, reativa a captura nativa
             if (modoEscutaAtivo) {
-                
-                // Adicionamos um atraso de 500ms (meio segundo).
-                // Isso dá tempo para o hardware do Android desligar o alto-falante
-                // completamente antes de tentar ligar o microfone, evitando conflitos.
-                setTimeout(() => {
-                    iniciarCapturaMic();
-                }, 500);
-                
+                try {
+                    // Passo 1: Forçamos a paragem do microfone para limpar a memória do Android.
+                    // Usamos await para garantir que ele termina de parar antes de avançar.
+                    await SpeechRecognition.stop(); 
+                } catch (erro) {
+                    // Se der erro ao parar (ex: já estava parado), ignoramos em silêncio.
+                    console.log("Limpeza de canal concluída.");
+                } finally {
+                    // Passo 2: Aumentamos a margem de segurança para 800ms.
+                    // Isto garante que a voz do assistente (TTS) já se calou completamente.
+                    setTimeout(() => {
+                        iniciarCapturaMic();
+                    }, 800);
+                }
             }
         }
 
