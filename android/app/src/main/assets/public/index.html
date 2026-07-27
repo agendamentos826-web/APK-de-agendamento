@@ -1444,6 +1444,8 @@
         let dadosVoz = { nome: '', horario: '', barbeiro: '', data: '' };
         let ouvinteCapacitorAdicionado = false;
         let ouvinteListeningStateAdicionado = false;
+        let ultimoResultadoParcial = '';
+        let cronometroFinalizacaoFala = null;
 
         // NOVO: Memória de conversação para não exigir o "Ney" a toda a hora
         let esperandoResposta = false;
@@ -1452,12 +1454,17 @@
         const SpeechRecognitionWeb = window.SpeechRecognition || window.webkitSpeechRecognition;
         let reconhecimentoWeb = null;
 
-        // ==============================================================================
-        // 1. PROCESSAMENTO DE VOZ (FLUXO LIMPO SEM TRAVAMENTOS)
-        // ==============================================================================
+        // --- 1. PROCESSAMENTO INTELIGENTE DE VOZ (COM FILTRO DE RUÍDO) ---
         function processarComandoVoz(textoReconhecido) {
-            if (!textoReconhecido || textoReconhecido.trim() === "") return;
-            if (isProcessingCommand) return;
+            // 1. FILTRO DE RUÍDO: Se estiver vazio, for nulo, ou for só ruído, ignora e sai.
+            if (!textoReconhecido || textoReconhecido.trim() === "") {
+                return; 
+            }
+
+            // 2. SEGURANÇA: Se já está a processar algo ou a falar, ignora.
+            if (isProcessingCommand || window.speechSynthesis?.speaking) {
+                return;
+            }
 
             const textoLimpo = textoReconhecido
                 .toLowerCase()
@@ -1466,43 +1473,39 @@
                 .replace(/[.,?!]/g, '')
                 .trim();
 
-            if (textoLimpo.length < 2 && !esperandoResposta) return;
+            // 3. FILTRO DE TAMANHO: Ignora sons curtos (ex: "a", "eh") se não estiver esperando resposta
+            if (textoLimpo.length < 2 && !esperandoResposta) {
+                return;
+            }
 
             const variacoesNey = ['ney', 'nei', 'néi', 'nem', 'meio', 'ley', 'hey'];
+            
             let ativou = false;
             let comando = textoLimpo;
 
             if (esperandoResposta) {
+                // Aceita imediatamente a resposta do utilizador (ex: o nome "Carlos")
                 ativou = true;
                 comando = textoLimpo;
-                esperandoResposta = false; 
+                esperandoResposta = false; // Desliga o modo resposta
             } else {
+                // Procura a palavra mágica
                 for (let v of variacoesNey) {
                     if (textoLimpo.includes(v)) {
                         ativou = true;
+                        // Remove a palavra "Ney" para sobrar só o comando real
                         comando = textoLimpo.replace(new RegExp(`\\b${v}\\b`, 'g'), '').trim();
                         break;
                     }
                 }
             }
 
+            // 4. AÇÃO: Se ativou (ouviu Ney ou era resposta), avança!
+            // Se NÃO ativou, o código morre aqui em silêncio e o microfone continua a ouvir.
             if (ativou) {
                 isProcessingCommand = true;
-                
-                // Dispara a paragem do microfone atual em segundo plano de forma silenciosa
-                try {
-                    const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
-                    if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
-                        window.Capacitor.Plugins.SpeechRecognition.stop().catch(() => {});
-                    }
-                } catch(e) {}
-
                 extrairInformacoes(comando);
-                
-                // Dá um pequeno respiro de 300ms para o Android se organizar antes de falar
-                setTimeout(() => {
-                    avaliarEAvancar();
-                }, 300);
+                avaliarEAvancar();
             }
         }
 
@@ -1585,17 +1588,13 @@
             executarAgendamentoFinal();
         }
 
-        // ==============================================================================
-        // 3. REATIVAÇÃO AUTOMÁTICA DO MICROFONE (COM LIMPEZA DE CANAL DE ÁUDIO)
-        // ==============================================================================
         function liberarEContinuarEscuta() {
+            // Libera o bloqueio de comando para que o sistema aceite novas palavras
             isProcessingCommand = false;
             
+            // Se o botão principal de escuta ainda estiver ligado, reativa a captura nativa
             if (modoEscutaAtivo) {
-                // Aguarda meio segundo após a fala terminar para ligar o ouvido novamente
-                setTimeout(() => {
-                    iniciarCapturaMic();
-                }, 500);
+                iniciarCapturaMic();
             }
         }
 
@@ -1627,25 +1626,31 @@
         }
 
         // --- 2. SÍNTESE DE VOZ (TTS) E CONTROLO DE ÁUDIO ---
-        // ==============================================================================
-        function falar(texto, callbackAposFalar) {
-            // NOTA: Foi removido o window.speechSynthesis.cancel() para evitar o bug de mudez
-            const mensagem = new SpeechSynthesisUtterance(texto);
-            mensagem.lang = 'pt-BR';
-            mensagem.rate = 1.0; 
+        async function falar(texto, callbackAoTerminar) {
+            if (!texto) return;
+            
+            microfonePausadoPeloSistema = true; 
+            await pararMicrofoneNativo(); // Para o mic antes de falar para evitar interferências
 
-            // Assim que terminar de falar, liberta o microfone
-            mensagem.onend = function() {
-                if (callbackAposFalar) callbackAposFalar();
-            };
+            const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
 
-            // Segurança: Se o motor de voz falhar, continua o fluxo na mesma
-            mensagem.onerror = function(e) {
-                console.error("Erro silencioso na voz:", e);
-                if (callbackAposFalar) callbackAposFalar(); 
-            };
-
-            window.speechSynthesis.speak(mensagem);
+            if (isNativo && window.Capacitor.Plugins.TextToSpeech) {
+                try {
+                    await window.Capacitor.Plugins.TextToSpeech.speak({
+                        text: texto, lang: 'pt-BR', rate: 1.0
+                    });
+                } catch(e) { console.error("Erro TTS Nativo:", e); }
+                
+                setTimeout(() => finalizarFala(callbackAoTerminar), 400);
+            } else if (window.speechSynthesis) {
+                window.speechSynthesis.cancel();
+                const mensagem = new SpeechSynthesisUtterance(texto);
+                mensagem.lang = 'pt-BR';
+                mensagem.onend = () => setTimeout(() => finalizarFala(callbackAoTerminar), 300);
+                window.speechSynthesis.speak(mensagem);
+            } else {
+                finalizarFala(callbackAoTerminar);
+            }
         }
 
         function finalizarFala(callback) {
@@ -1694,7 +1699,7 @@
                         window.Capacitor.Plugins.SpeechRecognition.addListener('partialResults', (data) => {
                             logDebug('partialResults: ' + JSON.stringify(data));
                             if (data.matches && data.matches.length > 0) {
-                                processarComandoVoz(data.matches[0]);
+                                ultimoResultadoParcial = data.matches[0];
                             }
                         });
                         ouvinteCapacitorAdicionado = true;
@@ -1705,9 +1710,19 @@
                             logDebug('listeningState: ' + JSON.stringify(data));
                             isListeningLock = false;
                             if (data.status === 'stopped') {
-                                if (modoEscutaAtivo && !microfonePausadoPeloSistema && !isProcessingCommand) {
-                                    setTimeout(() => iniciarCapturaMic(), 250);
-                                }
+                                if (cronometroFinalizacaoFala) clearTimeout(cronometroFinalizacaoFala);
+                                // Espera 350ms antes de decidir o texto final, pois às vezes o Android
+                                // manda um fragmento mais completo de partialResults logo DEPOIS do 'stopped'.
+                                cronometroFinalizacaoFala = setTimeout(() => {
+                                    const textoFinal = ultimoResultadoParcial;
+                                    ultimoResultadoParcial = '';
+                                    if (textoFinal) {
+                                        processarComandoVoz(textoFinal);
+                                    }
+                                    if (modoEscutaAtivo && !microfonePausadoPeloSistema && !isProcessingCommand) {
+                                        iniciarCapturaMic();
+                                    }
+                                }, 350);
                             }
                         });
                         ouvinteListeningStateAdicionado = true;
