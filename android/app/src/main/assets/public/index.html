@@ -1432,6 +1432,7 @@
         let isProcessingCommand = false;    // Impede o processamento repetido da mesma frase
         let dadosVoz = { nome: '', horario: '', barbeiro: '', data: '' };
         let ouvinteCapacitorAdicionado = false;
+        let ouvinteListeningStateAdicionado = false;
 
         // NOVO: Memória de conversação para não exigir o "Ney" a toda a hora
         let esperandoResposta = false;
@@ -1688,6 +1689,18 @@
                             }
                         });
                         ouvinteCapacitorAdicionado = true;
+                    }
+
+                    if (!ouvinteListeningStateAdicionado) {
+                        window.Capacitor.Plugins.SpeechRecognition.addListener('listeningState', (data) => {
+                            isListeningLock = false;
+                            if (data.status === 'stopped') {
+                                if (modoEscutaAtivo && !microfonePausadoPeloSistema && !isProcessingCommand) {
+                                    setTimeout(() => iniciarCapturaMic(), 250);
+                                }
+                            }
+                        });
+                        ouvinteListeningStateAdicionado = true;
                     }
 
                     // Ativa a escuta nativa no Android
