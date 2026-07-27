@@ -369,7 +369,7 @@
         <!-- INDICADOR VISUAL DO ASSISTENTE DE VOZ -->
         <!-- INDICADOR VISUAL DO ASSISTENTE DE VOZ DINDÂMICO -->
         <div id="indicador-voz" class="indicador-pronto">
-            🎙️ Toque para ativar o Assistente de Voz
+            🎙️ Toque para ativar o Comando
         </div>
       
     </div>
@@ -1456,54 +1456,96 @@
 
         // --- 2. FUNÇÕES DE SUPORTE VISUAL E DADOS ---
         // --- FUNÇÃO DE FALAR COM VOZ MASCULINA PARA O NEY ---
+        // --- FUNÇÃO DE FALAR (FORÇANDO VOZ MASCULINA NO ANDROID) ---
         async function falar(texto, callbackAoTerminar) {
             if (reconhecimentoWeb) { try { reconhecimentoWeb.stop(); } catch (e) {} }
             const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
 
             if (isNativo && window.Capacitor.Plugins.TextToSpeech) {
                 try {
-                    // === VOZ NATIVA DO ANDROID ===
-                    await window.Capacitor.Plugins.TextToSpeech.speak({
+                    let voiceIndex = undefined;
+
+                    // 1. Busca todas as vozes instaladas no Android
+                    try {
+                        const res = await window.Capacitor.Plugins.TextToSpeech.getSupportedVoices();
+                        if (res && res.voices && res.voices.length > 0) {
+                            
+                            // Mapeia e filtra apenas as vozes em português
+                            const vozesPT = res.voices
+                                .map((v, idx) => ({ ...v, idxOriginal: idx }))
+                                .filter(v => v.lang && v.lang.toLowerCase().replace('_', '-').includes('pt'));
+
+                            if (vozesPT.length > 0) {
+                                // Procura por vozes masculinas pelos identificadores do Google/Samsung
+                                let vozMasc = vozesPT.find(v => {
+                                    const nome = (v.name || '').toLowerCase();
+                                    return nome.includes('male') || 
+                                           nome.includes('masculin') || 
+                                           nome.includes('jef') || 
+                                           nome.includes('jab') || 
+                                           nome.includes('vic');
+                                });
+
+                                // No Android, se houver mais de 1 voz em PT-BR, a 2ª quase sempre é a masculina
+                                if (!vozMasc && vozesPT.length > 1) {
+                                    vozMasc = vozesPT[1];
+                                } else if (!vozMasc) {
+                                    vozMasc = vozesPT[0];
+                                }
+
+                                voiceIndex = vozMasc.idxOriginal;
+                            }
+                        }
+                    } catch (eVoz) {
+                        console.warn("Aviso ao buscar vozes nativas:", eVoz);
+                    }
+
+                    // 2. Monta as opções de fala
+                    const opcoesFala = {
                         text: texto,
                         lang: 'pt-BR',
                         rate: 1.0,
-                        pitch: 0.85 // Tom mais grave para soar como voz masculina (Ney)
-                    });
-                    
+                        pitch: 0.82 // Baixa levemente o tom para deixar a voz mais encorpada/masculina
+                    };
+
+                    if (voiceIndex !== undefined) {
+                        opcoesFala.voice = voiceIndex;
+                    }
+
+                    // Executa a fala
+                    await window.Capacitor.Plugins.TextToSpeech.speak(opcoesFala);
+
+                } catch (e) {
+                    console.error("Erro na fala customizada, usando padrão:", e);
+                    try {
+                        await window.Capacitor.Plugins.TextToSpeech.speak({ text: texto, lang: 'pt-BR', pitch: 0.82 });
+                    } catch (e2) {}
+                } finally {
+                    // Prossegue para ouvir o comando após falar
                     if (modoEscutaAtivo && callbackAoTerminar) {
                         callbackAoTerminar();
                     } else if (modoEscutaAtivo) {
                         iniciarCapturaMic(); 
                     }
-                } catch (e) {
-                    console.error("Erro na voz nativa: ", e);
-                    if (modoEscutaAtivo) iniciarCapturaMic();
                 }
+
             } else {
-                // === VOZ NA WEB / NAVEGADOR ===
+                // === MOTOR WEB / PC ===
                 const mensagem = new SpeechSynthesisUtterance(texto);
                 mensagem.lang = 'pt-BR';
                 mensagem.rate = 1.0;
-                mensagem.pitch = 0.85; // Tom mais grave na Web
+                mensagem.pitch = 0.85;
 
-                // Procura especificamente por uma voz masculina em pt-BR se disponível
                 const voices = window.speechSynthesis.getVoices();
                 const vozMasculina = voices.find(v => 
                     v.lang.includes('pt') && 
-                    (v.name.toLowerCase().includes('male') || 
-                     v.name.toLowerCase().includes('masculin') || 
-                     v.name.toLowerCase().includes('lucas') || 
-                     v.name.toLowerCase().includes('daniel') ||
-                     v.name.toLowerCase().includes('felipe'))
+                    (v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('lucas') || v.name.toLowerCase().includes('daniel'))
                 );
                 if (vozMasculina) mensagem.voice = vozMasculina;
 
                 mensagem.onend = () => {
-                    if (modoEscutaAtivo && callbackAoTerminar) {
-                        callbackAoTerminar();
-                    } else if (modoEscutaAtivo) {
-                        iniciarCapturaMic(); 
-                    }
+                    if (modoEscutaAtivo && callbackAoTerminar) callbackAoTerminar();
+                    else if (modoEscutaAtivo) iniciarCapturaMic();
                 };
                 
                 mensagem.onerror = () => {
