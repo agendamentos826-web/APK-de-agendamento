@@ -1433,16 +1433,17 @@
         let dadosVoz = { nome: '', horario: '', barbeiro: '', data: '' };
         let ouvinteCapacitorAdicionado = false;
 
+        // NOVO: Memória de conversação para não exigir o "Ney" a toda a hora
+        let esperandoResposta = false;
+
         // --- CONFIGURAÇÃO WEB (FALLBACK PARA COMPUTADOR) ---
         const SpeechRecognitionWeb = window.SpeechRecognition || window.webkitSpeechRecognition;
         let reconhecimentoWeb = null;
 
         // --- 1. PROCESSAMENTO INTELIGENTE DE VOZ ---
         function processarComandoVoz(textoReconhecido) {
-            // Se já estivermos a processar um comando ou se o assistente estiver a falar, ignora
             if (isProcessingCommand || window.speechSynthesis?.speaking) return;
 
-            // Normaliza o texto: remove acentos, pontuação e converte para minúsculas
             const textoLimpo = textoReconhecido
                 .toLowerCase()
                 .normalize('NFD')
@@ -1450,23 +1451,29 @@
                 .replace(/[.,?!]/g, '')
                 .trim();
 
-            // Lista estendida de como o Android costuma transcrever "Ney"
-            const variacoesNey = ['ney', 'nei', 'nei', 'nem', 'meio', 'ley', 'hey'];
+            const variacoesNey = ['ney', 'nei', 'néi', 'nem', 'meio', 'ley', 'hey'];
             
             let ativou = false;
             let comando = textoLimpo;
 
-            for (let v of variacoesNey) {
-                if (textoLimpo.includes(v)) {
-                    ativou = true;
-                    // Remove a palavra de ativação para isolar o comando (ex: "agendar lucas")
-                    comando = textoLimpo.replace(new RegExp(`\\b${v}\\b`, 'g'), '').trim();
-                    break;
+            // SE O ASSISTENTE FEZ UMA PERGUNTA, ACEITA QUALQUER RESPOSTA IMEDIATAMENTE
+            if (esperandoResposta) {
+                ativou = true;
+                comando = textoLimpo;
+                esperandoResposta = false; // Desliga o semáforo, pois já ouviu a resposta
+            } else {
+                // SE NÃO, SÓ ACORDA SE OUVIR O NOME DELE
+                for (let v of variacoesNey) {
+                    if (textoLimpo.includes(v)) {
+                        ativou = true;
+                        comando = textoLimpo.replace(new RegExp(`\\b${v}\\b`, 'g'), '').trim();
+                        break;
+                    }
                 }
             }
 
             if (ativou) {
-                isProcessingCommand = true; // Bloqueia novas capturas enquanto processa
+                isProcessingCommand = true;
                 extrairInformacoes(comando);
                 avaliarEAvancar();
             }
@@ -1525,17 +1532,23 @@
 
         function avaliarEAvancar() {
             if (!dadosVoz.nome) {
+                esperandoResposta = true; // Avisa o sistema que vai ficar à espera da resposta
                 falar("Qual é o nome do cliente?", () => liberarEContinuarEscuta());
                 return;
             }
             if (!dadosVoz.horario) {
+                esperandoResposta = true;
                 falar(`Entendi, agendar ${dadosVoz.nome}. Qual é o horário?`, () => liberarEContinuarEscuta());
                 return;
             }
             if (!dadosVoz.barbeiro) {
+                esperandoResposta = true;
                 falar(`Horário ${dadosVoz.horario}. Qual o barbeiro? Lucas ou Aluizio?`, () => liberarEContinuarEscuta());
                 return;
             }
+            
+            // Se tem os três dados, não espera mais respostas e avança!
+            esperandoResposta = false;
             executarAgendamentoFinal();
         }
 
@@ -1811,6 +1824,7 @@
 
         function resetarDados() {
             dadosVoz = { nome: '', horario: '', barbeiro: '', data: '' };
+            esperandoResposta = false; // Limpa também a memória da conversa se cancelarmos
         }
 
         // Vincula o evento de clique ao botão visual
