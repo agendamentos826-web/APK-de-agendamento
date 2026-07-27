@@ -1676,6 +1676,34 @@
             }
         }
 
+        // ==============================================================================
+        // FUNÇÃO DE VERIFICAÇÃO DE PERMISSÕES
+        // ==============================================================================
+        async function verificarEPedirPermissao() {
+            const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
+            
+            // Se estiver a rodar no navegador Web, não precisa da permissão nativa do Capacitor
+            if (!isNativo || !window.Capacitor.Plugins.SpeechRecognition) {
+                return true; 
+            }
+
+            try {
+                // 1. Verifica se a permissão já foi concedida
+                let status = await window.Capacitor.Plugins.SpeechRecognition.checkPermissions();
+                
+                // 2. Se não estiver concedida ('granted'), solicita a permissão ao utilizador
+                if (status.speechRecognition !== 'granted') {
+                    status = await window.Capacitor.Plugins.SpeechRecognition.requestPermissions();
+                }
+
+                // 3. Retorna verdadeiro apenas se o utilizador aceitou
+                return status.speechRecognition === 'granted';
+            } catch (erro) {
+                console.error("Erro ao verificar/solicitar permissões:", erro);
+                return false;
+            }
+        }
+
         // --- 4. AÇÃO DO BOTÃO LIGAR / DESLIGAR ---
         let bloqueioBotao = false;
 
@@ -1695,25 +1723,26 @@
                     atualizarIndicador("🎙️ Toque para ativar o Comando", "pronto");
                 } else {
                     // LIGAR MICROFONE
+                    atualizarIndicador("⏳ Verificando permissões...", "ouvindo");
+
+                    // 1. Tenta obter a permissão antes de avançar
+                    const temPermissao = await verificarEPedirPermissao();
+
+                    if (!temPermissao) {
+                        modoEscutaAtivo = false;
+                        atualizarIndicador("⚠️ Permissão de microfone negada!", "pronto");
+                        return; // Interrompe a execução com segurança se não houver permissão
+                    }
+
+                    // 2. Se a permissão foi concedida, inicia o fluxo normalmente
                     modoEscutaAtivo = true;
                     microfonePausadoPeloSistema = false;
                     isProcessingCommand = false;
                     resetarDados();
                     
-                    atualizarIndicador("⏳ Iniciando...", "ouvindo");
                     await pararMicrofoneNativo(); // Garante limpeza prévia do hardware
-
-                    const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
-                    if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
-                        try {
-                            const status = await window.Capacitor.Plugins.SpeechRecognition.checkPermissions();
-                            if (status.speechRecognition !== 'granted') {
-                                await window.Capacitor.Plugins.SpeechRecognition.requestPermissions();
-                            }
-                        } catch (e) {}
-                    }
-
                     atualizarIndicador("👂 Diga 'Ney' e o comando...", "ouvindo");
+                    
                     iniciarCapturaMic();
                 }
             } finally {
