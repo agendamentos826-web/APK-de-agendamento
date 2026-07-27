@@ -1421,17 +1421,6 @@
         // ASSISTENTE DE VOZ INTELIGENTE + GESTÃO DE SEGUNDO PLANO (ESTILO ALEXA)
         // ==============================================================================
         const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
-        setTimeout(() => {
-            if (isNativo) {
-                if (window.Capacitor.Plugins.SpeechRecognition) {
-                    alert("✅ Plugin Nativo encontrado! O problema é outra coisa.");
-                } else {
-                    alert("❌ App nativo, mas o Plugin não foi encontrado no JavaScript. Faltou compilar ou importar!");
-                }
-            } else {
-                alert("🌐 Rodando no modo Navegador/Web. O plugin nativo não será usado aqui.");
-            }
-        }, 2000);
         const SpeechRecognitionNativo = isNativo ? window.Capacitor.Plugins.SpeechRecognition : null;
         const SpeechRecognitionWeb = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -1513,6 +1502,7 @@
                     modoEscutaAtivo = false;
                     microfonePausadoPeloSistema = false;
                     estaFalando = false;
+                    clearInterval(loopEscutaNativa); // <--- MATA O CÃO DE GUARDA AQUI
                     
                     atualizarIndicador("🎙️ Toque para falar o comando", "pronto");
                     resetarDados();
@@ -1534,43 +1524,59 @@
             }
 
             // 5. Iniciar a Captura do Microfone (Nativo ou Web)
+            // Variável global para o cão de guarda
+            let loopEscutaNativa = null;
+
+            // 5. Iniciar a Captura do Microfone (Nativo ou Web)
             async function iniciarCapturaMic() {
                 if (!modoEscutaAtivo || estaFalando) return;
 
                 if (isNativo && SpeechRecognitionNativo) {
                     try {
-                        alert("Passo 1: Verificando permissões nativas...");
+                        // Pede permissão apenas se não tiver
                         const perm = await SpeechRecognitionNativo.checkPermissions();
-                        alert("Passo 2: Status da permissão = " + perm.speechRecognition);
-                        
                         if (perm.speechRecognition !== 'granted') {
-                            alert("Passo 3: Pedindo permissão ao usuário...");
-                            const req = await SpeechRecognitionNativo.requestPermissions();
-                            alert("Passo 4: Resposta do usuário = " + req.speechRecognition);
-                            
-                            if (req.speechRecognition !== 'granted') {
-                                alert("❌ Permissão negada! O app não pode ouvir.");
-                                return;
-                            }
+                            await SpeechRecognitionNativo.requestPermissions();
                         }
 
-                        alert("Passo 5: Tudo certo! Ligando motor do microfone...");
+                        // Inicia o microfone nativo
                         await SpeechRecognitionNativo.start({
                             language: "pt-BR",
                             partialResults: true,
                             popup: false 
                         });
+                        console.log("📱 Microfone Nativo ativado e escutando!");
                         
-                        alert("✅ Passo 6: Microfone nativo ligado com sucesso (sem erros no código)!");
-                        
+                        // CÃO DE GUARDA: Monitora se o Android derrubou o microfone por silêncio
+                        clearInterval(loopEscutaNativa);
+                        loopEscutaNativa = setInterval(async () => {
+                            if (modoEscutaAtivo && !estaFalando && !microfonePausadoPeloSistema) {
+                                try {
+                                    // Tenta iniciar novamente. Se já estiver rodando, o plugin ignora ou dá erro leve.
+                                    // Se o Android tiver derrubado (bolinha verde sumiu), ele religa.
+                                    await SpeechRecognitionNativo.start({
+                                        language: "pt-BR",
+                                        partialResults: true,
+                                        popup: false
+                                    });
+                                } catch (e) {
+                                    // Erros de loop ignorados silenciosamente
+                                }
+                            } else {
+                                clearInterval(loopEscutaNativa); // Para o monitoramento se desligarmos
+                            }
+                        }, 2500); // Checa a cada 2.5 segundos
+
                     } catch (erro) {
-                        // Se o motor do Google não existir ou der falha nativa, cai aqui
-                        alert("❌ ERRO FATAL NO PLUGIN: " + JSON.stringify(erro));
-                        console.error("Erro detalhado:", erro);
+                        console.warn("Aviso do mic nativo, reiniciando:", erro);
+                        if (modoEscutaAtivo && !microfonePausadoPeloSistema && !estaFalando) {
+                            setTimeout(iniciarCapturaMic, 500);
+                        }
                     }
                 } else if (reconhecimento) {
                     try {
                         reconhecimento.start();
+                        console.log("💻 Microfone Web ativo.");
                     } catch (erro) {
                         if (erro.name !== 'InvalidStateError') {
                             console.error("Erro no mic web:", erro);
