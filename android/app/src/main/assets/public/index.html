@@ -1455,105 +1455,43 @@
         }
 
         // --- 2. FUNÇÕES DE SUPORTE VISUAL E DADOS ---
-        // --- FUNÇÃO DE FALAR COM VOZ MASCULINA PARA O NEY ---
-        // --- FUNÇÃO DE FALAR (FORÇANDO VOZ MASCULINA NO ANDROID) ---
         async function falar(texto, callbackAoTerminar) {
-            if (reconhecimentoWeb) { try { reconhecimentoWeb.stop(); } catch (e) {} }
+            // BLOQUEIA O MICROFONE IMEDIATAMENTE PARA NÃO DAR CONFLITO COM A FALA
+            microfonePausadoPeloSistema = true; 
+            
             const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
 
-            if (isNativo && window.Capacitor.Plugins.TextToSpeech) {
-                try {
-                    let voiceIndex = undefined;
-
-                    // 1. Busca todas as vozes instaladas no Android
-                    try {
-                        const res = await window.Capacitor.Plugins.TextToSpeech.getSupportedVoices();
-                        if (res && res.voices && res.voices.length > 0) {
-                            
-                            // Mapeia e filtra apenas as vozes em português
-                            const vozesPT = res.voices
-                                .map((v, idx) => ({ ...v, idxOriginal: idx }))
-                                .filter(v => v.lang && v.lang.toLowerCase().replace('_', '-').includes('pt'));
-
-                            if (vozesPT.length > 0) {
-                                // Procura por vozes masculinas pelos identificadores do Google/Samsung
-                                let vozMasc = vozesPT.find(v => {
-                                    const nome = (v.name || '').toLowerCase();
-                                    return nome.includes('male') || 
-                                           nome.includes('masculin') || 
-                                           nome.includes('jef') || 
-                                           nome.includes('jab') || 
-                                           nome.includes('vic');
-                                });
-
-                                // No Android, se houver mais de 1 voz em PT-BR, a 2ª quase sempre é a masculina
-                                if (!vozMasc && vozesPT.length > 1) {
-                                    vozMasc = vozesPT[1];
-                                } else if (!vozMasc) {
-                                    vozMasc = vozesPT[0];
-                                }
-
-                                voiceIndex = vozMasc.idxOriginal;
-                            }
-                        }
-                    } catch (eVoz) {
-                        console.warn("Aviso ao buscar vozes nativas:", eVoz);
-                    }
-
-                    // 2. Monta as opções de fala
-                    const opcoesFala = {
-                        text: texto,
-                        lang: 'pt-BR',
-                        rate: 1.0,
-                        pitch: 0.82 // Baixa levemente o tom para deixar a voz mais encorpada/masculina
-                    };
-
-                    if (voiceIndex !== undefined) {
-                        opcoesFala.voice = voiceIndex;
-                    }
-
-                    // Executa a fala
-                    await window.Capacitor.Plugins.TextToSpeech.speak(opcoesFala);
-
-                } catch (e) {
-                    console.error("Erro na fala customizada, usando padrão:", e);
-                    try {
-                        await window.Capacitor.Plugins.TextToSpeech.speak({ text: texto, lang: 'pt-BR', pitch: 0.82 });
-                    } catch (e2) {}
-                } finally {
-                    // Prossegue para ouvir o comando após falar
-                    if (modoEscutaAtivo && callbackAoTerminar) {
-                        callbackAoTerminar();
-                    } else if (modoEscutaAtivo) {
-                        iniciarCapturaMic(); 
-                    }
+            if (isNativo) {
+                // Para o microfone nativo antes de falar
+                if (window.Capacitor.Plugins.SpeechRecognition) {
+                    try { await window.Capacitor.Plugins.SpeechRecognition.stop(); } catch(e){}
                 }
-
+                
+                // Fala usando o motor do celular
+                if (window.Capacitor.Plugins.TextToSpeech) {
+                    try {
+                        await window.Capacitor.Plugins.TextToSpeech.speak({ text: texto, lang: 'pt-BR', rate: 1.0, pitch: 0.82 });
+                    } catch(e) {}
+                }
             } else {
-                // === MOTOR WEB / PC ===
+                // Motor Web
+                if (reconhecimentoWeb) { try { reconhecimentoWeb.stop(); } catch(e){} }
                 const mensagem = new SpeechSynthesisUtterance(texto);
                 mensagem.lang = 'pt-BR';
-                mensagem.rate = 1.0;
                 mensagem.pitch = 0.85;
-
-                const voices = window.speechSynthesis.getVoices();
-                const vozMasculina = voices.find(v => 
-                    v.lang.includes('pt') && 
-                    (v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('lucas') || v.name.toLowerCase().includes('daniel'))
-                );
-                if (vozMasculina) mensagem.voice = vozMasculina;
-
-                mensagem.onend = () => {
-                    if (modoEscutaAtivo && callbackAoTerminar) callbackAoTerminar();
-                    else if (modoEscutaAtivo) iniciarCapturaMic();
-                };
-                
-                mensagem.onerror = () => {
-                    if (modoEscutaAtivo) iniciarCapturaMic();
-                };
-
                 window.speechSynthesis.speak(mensagem);
             }
+
+            // === O SEGREDO ESTÁ AQUI: O RESPIRO DO HARDWARE ===
+            // Espera 800 milissegundos ANTES de tentar ligar o microfone de novo.
+            // Isso dá tempo para o Android liberar o alto-falante e focar no microfone.
+            setTimeout(() => {
+                microfonePausadoPeloSistema = false; // Libera a trava
+                if (modoEscutaAtivo) {
+                    if (callbackAoTerminar) callbackAoTerminar();
+                    else iniciarCapturaMic();
+                }
+            }, 800); 
         }
 
         function atualizarIndicador(texto, estado) {
@@ -1673,13 +1611,13 @@
 
         // --- 4. INICIAR/PARAR O MICROFONE (HÍBRIDO) ---
         async function iniciarCapturaMic() {
-            if (!modoEscutaAtivo) return;
+            // Se o usuário desligou no botão OU se o sistema pausou para falar, aborta a escuta!
+            if (!modoEscutaAtivo || microfonePausadoPeloSistema) return;
             
             try {
                 const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
                 
                 if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
-                    
                     if (!ouvinteCapacitorAdicionado) {
                         window.Capacitor.Plugins.SpeechRecognition.addListener('partialResults', (data) => {
                             if (data.matches && data.matches.length > 0) {
@@ -1689,7 +1627,7 @@
                         ouvinteCapacitorAdicionado = true;
                     }
 
-                    // Removido o popup: true como você pediu
+                    // Inicia a escuta nativa
                     await window.Capacitor.Plugins.SpeechRecognition.start({
                         language: "pt-BR",
                         maxResults: 2,
@@ -1698,68 +1636,67 @@
                         popup: false 
                     });
                     
+                    // === O LOOP INFINITO ===
+                    // O start() acima termina de rodar quando o usuário fica em silêncio.
+                    // Se o modo escuta ainda estiver ativo e ele não estiver falando, religamos!
+                    if (modoEscutaAtivo && !microfonePausadoPeloSistema) {
+                        setTimeout(() => iniciarCapturaMic(), 300);
+                    }
+                    
                 } else if (reconhecimentoWeb) {
                     reconhecimentoWeb.start();
-                } else {
-                    modoEscutaAtivo = false;
-                    atualizarIndicador("🎙️ API indisponível neste aparelho.", "pronto");
                 }
             } catch (e) {
-                console.error("Erro ao ativar microfone: ", e);
-                // No Android, se o usuário ficar calado muito tempo, o motor desliga sozinho e cai aqui.
-                // Para manter a escuta contínua, tentamos ligar de novo se não tiver erro grave.
-                if (modoEscutaAtivo) {
-                    setTimeout(() => iniciarCapturaMic(), 500);
-                } else {
-                    atualizarIndicador("🎙️ Erro. Toque para tentar de novo.", "pronto");
+                // Se der erro (como tentar ligar um mic que já está ligado), espera um pouco e tenta de novo silenciosamente
+                if (modoEscutaAtivo && !microfonePausadoPeloSistema) {
+                    setTimeout(() => iniciarCapturaMic(), 1000);
                 }
             }
         }
 
+        let bloqueioBotao = false; // Evita que o usuário clique 2x rápido e quebre o sistema
+
         async function alternarEscutaVoz() {
+            if (bloqueioBotao) return; 
+            bloqueioBotao = true; // Trava o botão temporariamente
+            
             if (modoEscutaAtivo) {
-                // DESLIGA O ASSISTENTE
+                // --- DESLIGANDO ---
                 modoEscutaAtivo = false;
                 microfonePausadoPeloSistema = false;
-                
-                // === CORREÇÃO 1: Muda a cor IMEDIATAMENTE antes de qualquer outra coisa ===
                 resetarDados();
                 atualizarIndicador("🎙️ Toque para ativar o Comando", "pronto");
-                
-                // Agora sim tenta parar os serviços por baixo dos panos
-                try { window.speechSynthesis.cancel(); } catch(e){}
-                if (reconhecimentoWeb) { try { reconhecimentoWeb.stop(); } catch (e) {} }
                 
                 const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
                 if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
                     try { await window.Capacitor.Plugins.SpeechRecognition.stop(); } catch(e){}
+                } else if (reconhecimentoWeb) {
+                    try { reconhecimentoWeb.stop(); } catch(e){}
                 }
+                
+                setTimeout(() => { bloqueioBotao = false; }, 1000); // Destrava o botão após 1 seg
             
             } else {
-                // LIGA O ASSISTENTE
+                // --- LIGANDO ---
                 modoEscutaAtivo = true;
                 microfonePausadoPeloSistema = false;
                 resetarDados();
                 atualizarIndicador("⏳ Iniciando...", "ouvindo");
                 
-                try { window.speechSynthesis.speak(new SpeechSynthesisUtterance('')); } catch(e){}
-
                 const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
-                
                 if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
                     try {
                         const status = await window.Capacitor.Plugins.SpeechRecognition.checkPermissions();
                         if (status.speechRecognition !== 'granted') {
-                            atualizarIndicador("⏳ Aceite a permissão na tela...", "ouvindo");
                             await window.Capacitor.Plugins.SpeechRecognition.requestPermissions();
                         }
-                    } catch (erroPermissao) {
-                        console.warn("Aviso de permissão:", erroPermissao);
-                    }
+                    } catch (e) {}
                 }
 
                 atualizarIndicador("👂 Diga 'Ney' e o comando...", "ouvindo");
                 iniciarCapturaMic();
+                
+                setTimeout(() => { bloqueioBotao = false; }, 1000); // Destrava o botão após 1 seg
             }
         }
 
