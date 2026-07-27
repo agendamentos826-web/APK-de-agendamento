@@ -1509,11 +1509,44 @@
                 }
             }
 
-            function iniciarCapturaMic() {
+            // === 3. NOVA FUNÇÃO DE INICIAR O MICROFONE (HÍBRIDA) ===
+            async function iniciarCapturaMic() {
                 if (!modoEscutaAtivo) return;
+                
                 try {
-                    reconhecimento.start();
-                } catch (e) {}
+                    const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
+                    
+                    if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
+                        
+                        // Configura o ouvinte nativo apenas na primeira vez
+                        if (!ouvinteCapacitorAdicionado) {
+                            window.Capacitor.Plugins.SpeechRecognition.addListener('partialResults', (data) => {
+                                if (data.matches && data.matches.length > 0) {
+                                    processarComandoVoz(data.matches[0]);
+                                }
+                            });
+                            ouvinteCapacitorAdicionado = true;
+                        }
+
+                        // Inicia o motor do Android nativo
+                        await window.Capacitor.Plugins.SpeechRecognition.start({
+                            language: "pt-BR",
+                            maxResults: 2,
+                            prompt: "Ouvindo...",
+                            partialResults: true,
+                            popup: false // Esconde a janela nativa do Google para parecer fluido
+                        });
+
+                    } else {
+                        // Motor para navegador Web Normal (PC/Web)
+                        reconhecimento.start();
+                    }
+                } catch (e) {
+                    console.error("Erro ao ativar microfone: ", e);
+                    // Isso evita que o botão fique travado caso o microfone falhe
+                    modoEscutaAtivo = false;
+                    atualizarIndicador("🎙️ Erro no microfone. Toque para tentar de novo.", "pronto");
+                }
             }
 
             // 5. Trata App em Segundo Plano (Capacitor Background)
@@ -1632,20 +1665,26 @@
             }
 
             // 9. EVENTO DE RESULTADO (ONDE A MÁGICA DA WAKE WORD ACONTECE)
-            reconhecimento.onresult = (evento) => {
-                const textoDito = evento.results[evento.results.length - 1][0].transcript.trim().toLowerCase();
+            // === 1. NOVA FUNÇÃO PARA PROCESSAR O TEXTO ===
+            function processarComandoVoz(textoReconhecido) {
+                const textoDito = textoReconhecido.trim().toLowerCase();
                 
                 // Só dispara se ouvir "Ney" na frase!
                 if (textoDito.includes('ney')) {
-                    
-                    // Remove "Ney" da string para extrair apenas a ordem pura
                     const comando = textoDito.replace(/ney/g, '').trim();
-                    
                     extrairInformacoes(comando);
                     avaliarEAvancar();
                 }
-                // Se a palavra "ney" não for detectada, ele ignora silenciosamente.
+            }
+
+            // === 2. ATUALIZAR O EVENTO DA WEB PARA USAR A FUNÇÃO ACIMA ===
+            reconhecimento.onresult = (evento) => {
+                const texto = evento.results[evento.results.length - 1][0].transcript;
+                processarComandoVoz(texto);
             };
+
+            // Variável para evitar múltiplos ouvintes no Capacitor
+            let ouvinteCapacitorAdicionado = false;
 
             // 10. Looping
             function encerrarFluxoAtual() {
