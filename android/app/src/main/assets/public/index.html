@@ -1445,38 +1445,52 @@
             
             let dadosVoz = { nome: '', horario: '', barbeiro: '', data: '' };
 
-            // 1. Fala do Sintetizador de Voz (TTS)
-            function falar(texto, callbackAoTerminar) {
-                estaFalando = true;
-                
-                // Para a escuta antes de falar (Nativo ou Web)
-                if (isNativo && SpeechRecognitionNativo) {
-                    try { SpeechRecognitionNativo.stop(); } catch(e){}
-                } else if (reconhecimento) {
-                    try { reconhecimento.stop(); } catch (e) {}
+            // FUNÇÃO DE FALA BLINDADA PARA ANDROID/WEB
+            function falar(texto, callback) {
+                console.log("🗣️ Ney quer falar:", texto);
+
+                // 1. DESLIGA O MICROFONE PRIMEIRO: Libera o canal de áudio do celular
+                try {
+                    if (typeof isNativo !== 'undefined' && isNativo && typeof SpeechRecognitionNativo !== 'undefined') {
+                        SpeechRecognitionNativo.stop();
+                    } else if (typeof reconhecimento !== 'undefined' && reconhecimento) {
+                        reconhecimento.stop();
+                    }
+                } catch (e) {
+                    console.warn("Aviso ao pausar mic:", e);
                 }
 
-                window.speechSynthesis.cancel();
+                // 2. PAUSA DE 300ms: Dá tempo para o hardware do Android trocar de "Ouvir" para "Falar"
+                setTimeout(() => {
+                    // 3. DESTRAVA O MOTOR: Cancela qualquer fala que tenha ficado travada na memória
+                    window.speechSynthesis.cancel(); 
 
-                const mensagem = new SpeechSynthesisUtterance(texto);
-                mensagem.lang = 'pt-BR';
-                mensagem.rate = 1.08;
+                    const utterance = new SpeechSynthesisUtterance(texto);
+                    utterance.lang = 'pt-BR'; // Garante o sotaque brasileiro
+                    utterance.rate = 1.0;     // Velocidade normal
+                    utterance.pitch = 1.0;    // Tom de voz normal
 
-                mensagem.onend = () => {
-                    estaFalando = false;
-                    if (modoEscutaAtivo && callbackAoTerminar) {
-                        setTimeout(() => { callbackAoTerminar(); }, 300);
-                    }
-                };
+                    // 4. QUANDO TERMINAR DE FALAR: Chama o callback (que geralmente religa o microfone)
+                    utterance.onend = () => {
+                        console.log("✅ Ney terminou de falar.");
+                        if (callback) {
+                            // Dá um respiro de meio segundo antes de voltar a ouvir
+                            setTimeout(callback, 500); 
+                        }
+                    };
 
-                mensagem.onerror = () => {
-                    estaFalando = false;
-                    if (modoEscutaAtivo && callbackAoTerminar) {
-                        callbackAoTerminar();
-                    }
-                };
+                    // 5. PROTEÇÃO CONTRA ERROS: Se a voz falhar, ele não trava o app
+                    utterance.onerror = (e) => {
+                        console.error("❌ Erro no motor de voz do celular:", e);
+                        if (callback) {
+                            setTimeout(callback, 500);
+                        }
+                    };
 
-                window.speechSynthesis.speak(mensagem);
+                    // 6. FINALMENTE, FALA!
+                    window.speechSynthesis.speak(utterance);
+
+                }, 300); // Fim do setTimeout
             }
 
             // 2. Atualiza a barra visual
