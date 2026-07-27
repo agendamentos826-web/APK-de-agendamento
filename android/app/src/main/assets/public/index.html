@@ -1440,17 +1440,15 @@
         const SpeechRecognitionWeb = window.SpeechRecognition || window.webkitSpeechRecognition;
         let reconhecimentoWeb = null;
 
-        // --- 1. PROCESSAMENTO INTELIGENTE DE VOZ ---
+        // --- 1. PROCESSAMENTO INTELIGENTE DE VOZ (COM FILTRO DE RUÍDO) ---
         function processarComandoVoz(textoReconhecido) {
-            // RASTREADOR 1: Ele ouviu alguma coisa?
-            alert("Detetive 1: O microfone captou -> " + textoReconhecido);
-
-            if (isProcessingCommand) {
-                alert("Detetive Bloqueio: Ignorado porque já está processando outro comando.");
-                return;
+            // 1. FILTRO DE RUÍDO: Se estiver vazio, for nulo, ou for só ruído, ignora e sai.
+            if (!textoReconhecido || textoReconhecido.trim() === "") {
+                return; 
             }
-            if (window.speechSynthesis?.speaking) {
-                alert("Detetive Bloqueio: Ignorado porque o celular ainda está falando.");
+
+            // 2. SEGURANÇA: Se já está a processar algo ou a falar, ignora.
+            if (isProcessingCommand || window.speechSynthesis?.speaking) {
                 return;
             }
 
@@ -1461,33 +1459,39 @@
                 .replace(/[.,?!]/g, '')
                 .trim();
 
+            // 3. FILTRO DE TAMANHO: Ignora sons curtos (ex: "a", "eh") se não estiver esperando resposta
+            if (textoLimpo.length < 2 && !esperandoResposta) {
+                return;
+            }
+
             const variacoesNey = ['ney', 'nei', 'néi', 'nem', 'meio', 'ley', 'hey'];
             
             let ativou = false;
             let comando = textoLimpo;
 
             if (esperandoResposta) {
-                alert("Detetive 2: Modo resposta ativado! Aceitando -> " + textoLimpo);
+                // Aceita imediatamente a resposta do utilizador (ex: o nome "Carlos")
                 ativou = true;
                 comando = textoLimpo;
-                esperandoResposta = false; 
+                esperandoResposta = false; // Desliga o modo resposta
             } else {
+                // Procura a palavra mágica
                 for (let v of variacoesNey) {
                     if (textoLimpo.includes(v)) {
                         ativou = true;
+                        // Remove a palavra "Ney" para sobrar só o comando real
                         comando = textoLimpo.replace(new RegExp(`\\b${v}\\b`, 'g'), '').trim();
                         break;
                     }
                 }
             }
 
+            // 4. AÇÃO: Se ativou (ouviu Ney ou era resposta), avança!
+            // Se NÃO ativou, o código morre aqui em silêncio e o microfone continua a ouvir.
             if (ativou) {
-                alert("Detetive 3: Comando validado! Indo extrair informações.");
                 isProcessingCommand = true;
                 extrairInformacoes(comando);
                 avaliarEAvancar();
-            } else {
-                alert("Detetive Erro: Comando ignorado. Não estava esperando resposta e não ouviu 'Ney'.");
             }
         }
 
@@ -1543,32 +1547,41 @@
         }
 
         function avaliarEAvancar() {
-            alert("Detetive Avaliador: Nome=" + dadosVoz.nome + " | Horario=" + dadosVoz.horario);
-            
+            // Verifica se o nome está em branco. Se estiver, pergunta e aguarda resposta.
             if (!dadosVoz.nome) {
                 esperandoResposta = true; 
                 falar("Qual é o nome do cliente?", () => liberarEContinuarEscuta());
                 return;
             }
+            
+            // Verifica se o horário está em branco. Se estiver, pergunta e aguarda resposta.
             if (!dadosVoz.horario) {
                 esperandoResposta = true;
                 falar(`Entendi, agendar ${dadosVoz.nome}. Qual é o horário?`, () => liberarEContinuarEscuta());
                 return;
             }
+            
+            // Verifica se o barbeiro está em branco. Se estiver, pergunta e aguarda resposta.
             if (!dadosVoz.barbeiro) {
                 esperandoResposta = true;
                 falar(`Horário ${dadosVoz.horario}. Qual o barbeiro? Lucas ou Aluizio?`, () => liberarEContinuarEscuta());
                 return;
             }
             
+            // Se chegou até aqui, significa que os 3 dados foram preenchidos com sucesso.
+            // Desliga o modo de espera de resposta e executa o agendamento.
             esperandoResposta = false;
             executarAgendamentoFinal();
         }
 
         function liberarEContinuarEscuta() {
-            alert("Detetive Liberação: A fala terminou. Vou tentar reativar o microfone agora.");
+            // Libera o bloqueio de comando para que o sistema aceite novas palavras
             isProcessingCommand = false;
-            if (modoEscutaAtivo) iniciarCapturaMic();
+            
+            // Se o botão principal de escuta ainda estiver ligado, reativa a captura nativa
+            if (modoEscutaAtivo) {
+                iniciarCapturaMic();
+            }
         }
 
         function executarAgendamentoFinal() {
