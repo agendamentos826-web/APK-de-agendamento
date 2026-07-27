@@ -1446,6 +1446,8 @@
         let ouvinteListeningStateAdicionado = false;
         let ultimoResultadoParcial = '';
         let cronometroFinalizacaoFala = null;
+        let sessaoAtualVoz = 0;
+        let sessaoAguardandoResposta = 0;
 
         // NOVO: Memória de conversação para não exigir o "Ney" a toda a hora
         let esperandoResposta = false;
@@ -1698,8 +1700,16 @@
                     if (!ouvinteCapacitorAdicionado) {
                         window.Capacitor.Plugins.SpeechRecognition.addListener('partialResults', (data) => {
                             logDebug('partialResults: ' + JSON.stringify(data));
-                            if (data.matches && data.matches.length > 0) {
+                            if (data.matches && data.matches.length > 0 && data.matches[0]) {
                                 ultimoResultadoParcial = data.matches[0];
+                                // Se esse resultado chegou atrasado (depois da sessão já ter fechado),
+                                // processa mesmo assim, desde que ainda estejamos esperando resposta pra essa pergunta.
+                                if (sessaoAtualVoz !== sessaoAguardandoResposta) {
+                                    sessaoAguardandoResposta = sessaoAtualVoz;
+                                    const texto = ultimoResultadoParcial;
+                                    ultimoResultadoParcial = '';
+                                    processarComandoVoz(texto);
+                                }
                             }
                         });
                         ouvinteCapacitorAdicionado = true;
@@ -1710,12 +1720,12 @@
                             logDebug('listeningState: ' + JSON.stringify(data));
                             isListeningLock = false;
                             if (data.status === 'stopped') {
+                                sessaoAtualVoz++;
                                 if (cronometroFinalizacaoFala) clearTimeout(cronometroFinalizacaoFala);
-                                // Espera 350ms antes de decidir o texto final, pois às vezes o Android
-                                // manda um fragmento mais completo de partialResults logo DEPOIS do 'stopped'.
                                 cronometroFinalizacaoFala = setTimeout(() => {
                                     const textoFinal = ultimoResultadoParcial;
                                     ultimoResultadoParcial = '';
+                                    sessaoAguardandoResposta = sessaoAtualVoz;
                                     if (textoFinal) {
                                         processarComandoVoz(textoFinal);
                                     }
