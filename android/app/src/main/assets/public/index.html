@@ -1626,6 +1626,8 @@
             isListeningLock = true;
             const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
 
+            alert("Passo 6: Entrou na função do microfone. É nativo? " + isNativo);
+
             try {
                 if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
                     
@@ -1638,49 +1640,33 @@
                         ouvinteCapacitorAdicionado = true;
                     }
 
-                    // Tenta iniciar o microfone nativo
-                    await window.Capacitor.Plugins.SpeechRecognition.start({
+                    alert("Passo 7: A enviar ordem para o Android iniciar a escuta...");
+
+                    // Temporizador de sobrevivência para a ativação do microfone (3 segundos)
+                    const promessaIniciar = window.Capacitor.Plugins.SpeechRecognition.start({
                         language: "pt-BR",
                         maxResults: 2,
                         prompt: "", 
                         partialResults: true,
                         popup: false 
                     });
+
+                    const timeoutSeguranca = new Promise((_, rejeitar) => 
+                        setTimeout(() => rejeitar(new Error("O Android ignorou o pedido de microfone (Timeout).")), 3000)
+                    );
+
+                    // Tenta iniciar; se demorar mais de 3s, o timeoutSeguranca dispara o erro!
+                    await Promise.race([promessaIniciar, timeoutSeguranca]);
+
+                    alert("Passo 8: SUCESSO! O microfone está ligado!");
                     
-                } else if (SpeechRecognitionWeb) {
-                    // [Código Web mantém-se igual]
-                    if (!reconhecimentoWeb) {
-                        reconhecimentoWeb = new SpeechRecognitionWeb();
-                        reconhecimentoWeb.lang = 'pt-BR';
-                        reconhecimentoWeb.continuous = false;
-                        reconhecimentoWeb.interimResults = true;
-
-                        reconhecimentoWeb.onresult = (evento) => {
-                            const textoDito = evento.results[evento.results.length - 1][0].transcript;
-                            processarComandoVoz(textoDito);
-                        };
-
-                        reconhecimentoWeb.onend = () => {
-                            isListeningLock = false;
-                            if (modoEscutaAtivo && !microfonePausadoPeloSistema) {
-                                setTimeout(() => iniciarCapturaMic(), 300);
-                            }
-                        };
-                    }
-                    reconhecimentoWeb.start();
-                }
+                } 
             } catch (erro) {
-                // RASTREADOR: Vai mostrar uma janela no telemóvel com o erro exato!
-                alert("Erro ao iniciar microfone: " + JSON.stringify(erro));
-                console.error("Aviso/Erro no Mic:", erro);
-                
+                alert("Passo de ERRO: A ativação falhou com a mensagem: " + erro.message);
                 modoEscutaAtivo = false;
-                atualizarIndicador("❌ Erro interno no Mic.", "pronto");
+                atualizarIndicador("❌ Erro ao ativar mic.", "pronto");
             } finally { 
                 isListeningLock = false;
-                if (modoEscutaAtivo && !microfonePausadoPeloSistema && !isProcessingCommand) {
-                    setTimeout(() => iniciarCapturaMic(), 400);
-                }
             }
         }
 
@@ -1747,22 +1733,21 @@
             if (bloqueioBotao) return; 
             bloqueioBotao = true; 
             
+            alert("Passo 1: Botão clicado e bloqueio ativado.");
+
             try {
                 if (modoEscutaAtivo) {
-                    // --- DESLIGAR MICROFONE ---
+                    // ... (desligar omitido por agora, o problema está ao ligar)
                     modoEscutaAtivo = false;
-                    microfonePausadoPeloSistema = false;
-                    isProcessingCommand = false;
-                    resetarDados();
-                    
                     await pararMicrofoneNativo();
                     atualizarIndicador("🎙️ Toque para ativar o Comando", "pronto");
                 } else {
-                    // --- LIGAR MICROFONE ---
+                    alert("Passo 2: Vamos verificar as permissões.");
                     atualizarIndicador("⏳ Verificando permissões...", "ouvindo");
 
-                    // Executa a verificação
                     const temPermissao = await verificarEPedirPermissao();
+
+                    alert("Passo 3: Verificação concluída. Permissão concedida? " + temPermissao);
 
                     if (!temPermissao) {
                         modoEscutaAtivo = false;
@@ -1770,26 +1755,21 @@
                         return;
                     }
 
-                    // Permissão confirmada: Ativa o modo de escuta
                     modoEscutaAtivo = true;
                     microfonePausadoPeloSistema = false;
                     isProcessingCommand = false;
-                    resetarDados();
                     
-                    await pararMicrofoneNativo(); // Garante limpeza prévia do hardware
+                    alert("Passo 4: Preparando para ligar o microfone.");
+                    await pararMicrofoneNativo(); 
                     
-                    // Muda o estado visual para o utilizador saber que pode falar
                     atualizarIndicador("👂 Diga 'Ney' e o comando...", "ouvindo");
                     
-                    // Inicia a captura de áudio nativa
+                    alert("Passo 5: A chamar a função iniciarCapturaMic().");
                     iniciarCapturaMic();
                 }
             } catch (erroGeral) {
-                console.error("Erro ao alternar voz:", erroGeral);
-                modoEscutaAtivo = false;
-                atualizarIndicador("❌ Erro ao ativar mic. Tente de novo.", "pronto");
+                alert("Erro no botão: " + erroGeral);
             } finally {
-                // Libera o botão após 500ms para evitar cliques múltiplos
                 setTimeout(() => { bloqueioBotao = false; }, 500);
             }
         }
