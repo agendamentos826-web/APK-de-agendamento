@@ -1638,6 +1638,7 @@
             // 9. FUNÇÃO CENTRAL DE PROCESSAMENTO DA VOZ 
             function processarVoz(textoDito) {
                 console.log("🟢 [VOZ CAPTURADA]:", textoDito);
+                atualizarIndicador("🗣️ Ouvi: " + textoDito, "ouvindo")
                 const textoNormalizado = normalizarTexto(textoDito);
 
                 if (aguardandoWakeWord) {
