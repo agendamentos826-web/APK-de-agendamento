@@ -1456,42 +1456,68 @@
 
         // --- 2. FUNÇÕES DE SUPORTE VISUAL E DADOS ---
         async function falar(texto, callbackAoTerminar) {
-            // BLOQUEIA O MICROFONE IMEDIATAMENTE PARA NÃO DAR CONFLITO COM A FALA
+            if (!texto) return;
+            
+            // Pausa o ciclo do microfone para o Ney não ouvir a si mesmo
             microfonePausadoPeloSistema = true; 
             
             const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
 
             if (isNativo) {
-                // Para o microfone nativo antes de falar
+                // 1. Para o microfone primeiro
                 if (window.Capacitor.Plugins.SpeechRecognition) {
                     try { await window.Capacitor.Plugins.SpeechRecognition.stop(); } catch(e){}
                 }
                 
-                // Fala usando o motor do celular
+                // 2. Pequeno respiro (150ms) para o Android liberar o áudio
+                await new Promise(r => setTimeout(r, 150));
+
+                let falouComSucesso = false;
+
+                // 3. Fala usando o plugin nativo simples (sem pitch para não quebrar no Moto G34)
                 if (window.Capacitor.Plugins.TextToSpeech) {
                     try {
-                        await window.Capacitor.Plugins.TextToSpeech.speak({ text: texto, lang: 'pt-BR', rate: 1.0, pitch: 0.82 });
-                    } catch(e) {}
+                        await window.Capacitor.Plugins.TextToSpeech.speak({
+                            text: texto,
+                            lang: 'pt-BR',
+                            rate: 1.0
+                        });
+                        falouComSucesso = true;
+                    } catch(e) {
+                        console.error("Erro no TextToSpeech nativo:", e);
+                    }
                 }
+
+                // Fallback de segurança: se o plugin falhar, tenta o motor web
+                if (!falouComSucesso && window.speechSynthesis) {
+                    try {
+                        window.speechSynthesis.cancel();
+                        const msg = new SpeechSynthesisUtterance(texto);
+                        msg.lang = 'pt-BR';
+                        window.speechSynthesis.speak(msg);
+                        await new Promise(r => setTimeout(r, Math.max(1500, texto.length * 80)));
+                    } catch(e){}
+                }
+
             } else {
-                // Motor Web
+                // Motor Web (PC)
                 if (reconhecimentoWeb) { try { reconhecimentoWeb.stop(); } catch(e){} }
-                const mensagem = new SpeechSynthesisUtterance(texto);
-                mensagem.lang = 'pt-BR';
-                mensagem.pitch = 0.85;
-                window.speechSynthesis.speak(mensagem);
+                if (window.speechSynthesis) {
+                    window.speechSynthesis.cancel();
+                    const mensagem = new SpeechSynthesisUtterance(texto);
+                    mensagem.lang = 'pt-BR';
+                    window.speechSynthesis.speak(mensagem);
+                }
             }
 
-            // === O SEGREDO ESTÁ AQUI: O RESPIRO DO HARDWARE ===
-            // Espera 800 milissegundos ANTES de tentar ligar o microfone de novo.
-            // Isso dá tempo para o Android liberar o alto-falante e focar no microfone.
+            // 4. Espera o som terminar e religa o microfone suavemente
             setTimeout(() => {
-                microfonePausadoPeloSistema = false; // Libera a trava
+                microfonePausadoPeloSistema = false; // Libera o microfone
                 if (modoEscutaAtivo) {
                     if (callbackAoTerminar) callbackAoTerminar();
                     else iniciarCapturaMic();
                 }
-            }, 800); 
+            }, 500); 
         }
 
         function atualizarIndicador(texto, estado) {
@@ -1611,7 +1637,6 @@
 
         // --- 4. INICIAR/PARAR O MICROFONE (HÍBRIDO) ---
         async function iniciarCapturaMic() {
-            // Se o usuário desligou no botão OU se o sistema pausou para falar, aborta a escuta!
             if (!modoEscutaAtivo || microfonePausadoPeloSistema) return;
             
             try {
@@ -1627,7 +1652,6 @@
                         ouvinteCapacitorAdicionado = true;
                     }
 
-                    // Inicia a escuta nativa
                     await window.Capacitor.Plugins.SpeechRecognition.start({
                         language: "pt-BR",
                         maxResults: 2,
@@ -1636,9 +1660,7 @@
                         popup: false 
                     });
                     
-                    // === O LOOP INFINITO ===
-                    // O start() acima termina de rodar quando o usuário fica em silêncio.
-                    // Se o modo escuta ainda estiver ativo e ele não estiver falando, religamos!
+                    // Se o silêncio desligou o mic nativo, religa automaticamente
                     if (modoEscutaAtivo && !microfonePausadoPeloSistema) {
                         setTimeout(() => iniciarCapturaMic(), 300);
                     }
@@ -1647,56 +1669,56 @@
                     reconhecimentoWeb.start();
                 }
             } catch (e) {
-                // Se der erro (como tentar ligar um mic que já está ligado), espera um pouco e tenta de novo silenciosamente
                 if (modoEscutaAtivo && !microfonePausadoPeloSistema) {
-                    setTimeout(() => iniciarCapturaMic(), 1000);
+                    setTimeout(() => iniciarCapturaMic(), 800);
                 }
             }
         }
 
-        let bloqueioBotao = false; // Evita que o usuário clique 2x rápido e quebre o sistema
+        let bloqueioBotao = false;
 
         async function alternarEscutaVoz() {
             if (bloqueioBotao) return; 
-            bloqueioBotao = true; // Trava o botão temporariamente
+            bloqueioBotao = true; 
             
-            if (modoEscutaAtivo) {
-                // --- DESLIGANDO ---
-                modoEscutaAtivo = false;
-                microfonePausadoPeloSistema = false;
-                resetarDados();
-                atualizarIndicador("🎙️ Toque para ativar o Comando", "pronto");
+            try {
+                if (modoEscutaAtivo) {
+                    // DESLIGANDO
+                    modoEscutaAtivo = false;
+                    microfonePausadoPeloSistema = false;
+                    resetarDados();
+                    atualizarIndicador("🎙️ Toque para ativar o Assistente", "pronto");
+                    
+                    const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
+                    if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
+                        try { await window.Capacitor.Plugins.SpeechRecognition.stop(); } catch(e){}
+                    } else if (reconhecimentoWeb) {
+                        try { reconhecimentoWeb.stop(); } catch(e){}
+                    }
                 
-                const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
-                if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
-                    try { await window.Capacitor.Plugins.SpeechRecognition.stop(); } catch(e){}
-                } else if (reconhecimentoWeb) {
-                    try { reconhecimentoWeb.stop(); } catch(e){}
-                }
-                
-                setTimeout(() => { bloqueioBotao = false; }, 1000); // Destrava o botão após 1 seg
-            
-            } else {
-                // --- LIGANDO ---
-                modoEscutaAtivo = true;
-                microfonePausadoPeloSistema = false;
-                resetarDados();
-                atualizarIndicador("⏳ Iniciando...", "ouvindo");
-                
-                const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
-                if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
-                    try {
-                        const status = await window.Capacitor.Plugins.SpeechRecognition.checkPermissions();
-                        if (status.speechRecognition !== 'granted') {
-                            await window.Capacitor.Plugins.SpeechRecognition.requestPermissions();
-                        }
-                    } catch (e) {}
-                }
+                } else {
+                    // LIGANDO
+                    modoEscutaAtivo = true;
+                    microfonePausadoPeloSistema = false;
+                    resetarDados();
+                    atualizarIndicador("⏳ Iniciando...", "ouvindo");
+                    
+                    const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
+                    if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
+                        try {
+                            const status = await window.Capacitor.Plugins.SpeechRecognition.checkPermissions();
+                            if (status.speechRecognition !== 'granted') {
+                                await window.Capacitor.Plugins.SpeechRecognition.requestPermissions();
+                            }
+                        } catch (e) {}
+                    }
 
-                atualizarIndicador("👂 Diga 'Ney' e o comando...", "ouvindo");
-                iniciarCapturaMic();
-                
-                setTimeout(() => { bloqueioBotao = false; }, 1000); // Destrava o botão após 1 seg
+                    atualizarIndicador("👂 Diga 'Ney' e o comando...", "ouvindo");
+                    iniciarCapturaMic();
+                }
+            } finally {
+                // GARANTIA ABSOLUTA: O botão SEMPRE destrava após meio segundo, sem virar fantasma
+                setTimeout(() => { bloqueioBotao = false; }, 500);
             }
         }
 
