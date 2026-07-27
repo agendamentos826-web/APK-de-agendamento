@@ -1587,27 +1587,26 @@
         }
 
         // ==============================================================================
-        // 3. REATIVAÇÃO AUTOMÁTICA DO MICROFONE (ESTRATÉGIA DE REINÍCIO FORÇADO)
+        // 3. REATIVAÇÃO AUTOMÁTICA DO MICROFONE (COM LIMPEZA DE CANAL DE ÁUDIO)
         // ==============================================================================
-        async function liberarEContinuarEscuta() {
-            // Libera o bloqueio de comando
+        function liberarEContinuarEscuta() {
+            // 1. Libera o bloqueio de comando para que o sistema aceite novas palavras
             isProcessingCommand = false;
-            
+
             if (modoEscutaAtivo) {
-                try {
-                    // Passo 1: Forçamos a paragem do microfone para limpar a memória do Android.
-                    // Usamos await para garantir que ele termina de parar antes de avançar.
-                    await SpeechRecognition.stop(); 
-                } catch (erro) {
-                    // Se der erro ao parar (ex: já estava parado), ignoramos em silêncio.
-                    console.log("Limpeza de canal concluída.");
-                } finally {
-                    // Passo 2: Aumentamos a margem de segurança para 800ms.
-                    // Isto garante que a voz do assistente (TTS) já se calou completamente.
-                    setTimeout(() => {
-                        iniciarCapturaMic();
-                    }, 800);
+                
+                // 2. TRUQUE DE MESTRE: Força o motor de voz (TTS) a libertar o hardware.
+                // Como esta função é chamada APÓS a fala terminar, isto não corta o áudio,
+                // apenas destrava o canal para que o microfone possa assumir o controlo.
+                if (window.speechSynthesis) {
+                    window.speechSynthesis.cancel();
                 }
+
+                // 3. Damos 800 milissegundos para o processador do telemóvel efetivar a limpeza,
+                // e depois chamamos a captura do microfone.
+                setTimeout(() => {
+                    iniciarCapturaMic();
+                }, 800);
             }
         }
 
