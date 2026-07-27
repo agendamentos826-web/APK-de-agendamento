@@ -1421,6 +1421,17 @@
         // ASSISTENTE DE VOZ INTELIGENTE + GESTÃO DE SEGUNDO PLANO (ESTILO ALEXA)
         // ==============================================================================
         const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
+        setTimeout(() => {
+            if (isNativo) {
+                if (window.Capacitor.Plugins.SpeechRecognition) {
+                    alert("✅ Plugin Nativo encontrado! O problema é outra coisa.");
+                } else {
+                    alert("❌ App nativo, mas o Plugin não foi encontrado no JavaScript. Faltou compilar ou importar!");
+                }
+            } else {
+                alert("🌐 Rodando no modo Navegador/Web. O plugin nativo não será usado aqui.");
+            }
+        }, 2000);
         const SpeechRecognitionNativo = isNativo ? window.Capacitor.Plugins.SpeechRecognition : null;
         const SpeechRecognitionWeb = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -1812,7 +1823,7 @@
         // ==========================================
         document.addEventListener("visibilitychange", () => {
             const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
-
+            
             if (document.hidden) {
                 // O APP FOI MINIMIZADO OU A TELA DESLIGOU
                 if (modoEscutaAtivo) {
