@@ -1643,31 +1643,43 @@
         }
 
         // --- 2. SÍNTESE DE VOZ (TTS) E CONTROLO DE ÁUDIO ---
-        async function falar(texto, callbackAoTerminar) {
-            if (!texto) return;
-            
-            microfonePausadoPeloSistema = true; 
-            await pararMicrofoneNativo(); // Para o mic antes de falar para evitar interferências
-
-            const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
-
-            if (isNativo && window.Capacitor.Plugins.TextToSpeech) {
-                try {
-                    await window.Capacitor.Plugins.TextToSpeech.speak({
-                        text: texto, lang: 'pt-BR', rate: 1.0
-                    });
-                } catch(e) { console.error("Erro TTS Nativo:", e); }
-                
-                setTimeout(() => finalizarFala(callbackAoTerminar), 400);
-            } else if (window.speechSynthesis) {
+        // ==============================================================================
+        function falar(texto, callbackAposFalar) {
+            // 1. Cancela qualquer fala que tenha ficado presa na memória
+            if (window.speechSynthesis) {
                 window.speechSynthesis.cancel();
-                const mensagem = new SpeechSynthesisUtterance(texto);
-                mensagem.lang = 'pt-BR';
-                mensagem.onend = () => setTimeout(() => finalizarFala(callbackAoTerminar), 300);
-                window.speechSynthesis.speak(mensagem);
-            } else {
-                finalizarFala(callbackAoTerminar);
             }
+
+            const mensagem = new SpeechSynthesisUtterance(texto);
+            mensagem.lang = 'pt-BR';
+            mensagem.rate = 1.0; // Velocidade normal
+
+            let callbackJaExecutado = false;
+
+            // 2. Função interna para garantir que o microfone só liga UMA vez após a fala
+            const finalizarFala = () => {
+                if (!callbackJaExecutado) {
+                    callbackJaExecutado = true;
+                    if (callbackAposFalar) {
+                        callbackAposFalar(); // Aqui ele chama o liberarEContinuarEscuta()
+                    }
+                }
+            };
+
+            // 3. Gatilho Oficial: Dispara quando o Android avisa que terminou de falar
+            mensagem.onend = function() {
+                finalizarFala();
+            };
+
+            // 4. Gatilho de Segurança (Fallback): Se o Android bugar e não disparar o onend,
+            // nós calculamos um tempo aproximado (ex: 200ms por letra) para forçar a continuação.
+            const tempoEstimadoDaFrase = texto.length * 200 + 1000; 
+            setTimeout(() => {
+                finalizarFala();
+            }, tempoEstimadoDaFrase);
+
+            // 5. Dá ordem para o telemóvel falar
+            window.speechSynthesis.speak(mensagem);
         }
 
         function finalizarFala(callback) {
