@@ -1442,7 +1442,17 @@
 
         // --- 1. PROCESSAMENTO INTELIGENTE DE VOZ ---
         function processarComandoVoz(textoReconhecido) {
-            if (isProcessingCommand || window.speechSynthesis?.speaking) return;
+            // RASTREADOR 1: Ele ouviu alguma coisa?
+            alert("Detetive 1: O microfone captou -> " + textoReconhecido);
+
+            if (isProcessingCommand) {
+                alert("Detetive Bloqueio: Ignorado porque já está processando outro comando.");
+                return;
+            }
+            if (window.speechSynthesis?.speaking) {
+                alert("Detetive Bloqueio: Ignorado porque o celular ainda está falando.");
+                return;
+            }
 
             const textoLimpo = textoReconhecido
                 .toLowerCase()
@@ -1456,13 +1466,12 @@
             let ativou = false;
             let comando = textoLimpo;
 
-            // SE O ASSISTENTE FEZ UMA PERGUNTA, ACEITA QUALQUER RESPOSTA IMEDIATAMENTE
             if (esperandoResposta) {
+                alert("Detetive 2: Modo resposta ativado! Aceitando -> " + textoLimpo);
                 ativou = true;
                 comando = textoLimpo;
-                esperandoResposta = false; // Desliga o semáforo, pois já ouviu a resposta
+                esperandoResposta = false; 
             } else {
-                // SE NÃO, SÓ ACORDA SE OUVIR O NOME DELE
                 for (let v of variacoesNey) {
                     if (textoLimpo.includes(v)) {
                         ativou = true;
@@ -1473,9 +1482,12 @@
             }
 
             if (ativou) {
+                alert("Detetive 3: Comando validado! Indo extrair informações.");
                 isProcessingCommand = true;
                 extrairInformacoes(comando);
                 avaliarEAvancar();
+            } else {
+                alert("Detetive Erro: Comando ignorado. Não estava esperando resposta e não ouviu 'Ney'.");
             }
         }
 
@@ -1531,8 +1543,10 @@
         }
 
         function avaliarEAvancar() {
+            alert("Detetive Avaliador: Nome=" + dadosVoz.nome + " | Horario=" + dadosVoz.horario);
+            
             if (!dadosVoz.nome) {
-                esperandoResposta = true; // Avisa o sistema que vai ficar à espera da resposta
+                esperandoResposta = true; 
                 falar("Qual é o nome do cliente?", () => liberarEContinuarEscuta());
                 return;
             }
@@ -1547,12 +1561,12 @@
                 return;
             }
             
-            // Se tem os três dados, não espera mais respostas e avança!
             esperandoResposta = false;
             executarAgendamentoFinal();
         }
 
         function liberarEContinuarEscuta() {
+            alert("Detetive Liberação: A fala terminou. Vou tentar reativar o microfone agora.");
             isProcessingCommand = false;
             if (modoEscutaAtivo) iniciarCapturaMic();
         }
