@@ -1452,9 +1452,8 @@
         const SpeechRecognitionWeb = window.SpeechRecognition || window.webkitSpeechRecognition;
         let reconhecimentoWeb = null;
 
-        // --- 1. PROCESSAMENTO INTELIGENTE DE VOZ (SEQUÊNCIA SEGURA E ASSÍNCRONA) ---
+        // --- 1. PROCESSAMENTO INTELIGENTE DE VOZ (CORREÇÃO DE TRAVAMENTO) ---
         async function processarComandoVoz(textoReconhecido) {
-            // Filtros de segurança e ruído
             if (!textoReconhecido || textoReconhecido.trim() === "") return;
             if (isProcessingCommand || window.speechSynthesis?.speaking) return;
 
@@ -1485,30 +1484,23 @@
                 }
             }
 
-            // 4. AÇÃO: Sequência Segura de Desligamento e Processamento
+            // 4. AÇÃO: Execução Imediata
             if (ativou) {
-                // Bloqueia novas entradas imediatamente para evitar duplicações
                 isProcessingCommand = true;
                 
-                try {
-                    // PARAGEM SUAVE: O 'await' obriga o código a esperar que o ícone verde
-                    // do Android desapareça naturalmente antes de o assistente tentar falar.
-                    const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
-                    if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
-                        await window.Capacitor.Plugins.SpeechRecognition.stop();
-                    }
-                } catch (erro) {
-                    console.log("Erro silencioso ao parar o mic:", erro);
+                // TRUQUE: Enviamos a ordem de paragem em segundo plano SEM o 'await'.
+                // Assim, se o Android já tiver parado o microfone (como vimos no vídeo),
+                // o código não congela e avança imediatamente para a próxima linha!
+                const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
+                if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
+                    window.Capacitor.Plugins.SpeechRecognition.stop().catch(() => {});
                 }
 
-                // Agora que o hardware está seguro e fechado, extraímos a informação
+                // Extraímos as informações faladas
                 extrairInformacoes(comando);
                 
-                // Damos apenas 500ms de respiro para garantir a estabilidade 
-                // e avançamos para a pergunta ou conclusão
-                setTimeout(() => {
-                    avaliarEAvancar();
-                }, 500);
+                // Chamamos diretamente a avaliação para o assistente te responder na hora
+                avaliarEAvancar();
             }
         }
 
