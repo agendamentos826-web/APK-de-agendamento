@@ -1586,13 +1586,23 @@
             executarAgendamentoFinal();
         }
 
+        // ==============================================================================
+        // 3. REATIVAÇÃO AUTOMÁTICA DO MICROFONE (COM ATRASO DE SEGURANÇA)
+        // ==============================================================================
         function liberarEContinuarEscuta() {
             // Libera o bloqueio de comando para que o sistema aceite novas palavras
             isProcessingCommand = false;
             
             // Se o botão principal de escuta ainda estiver ligado, reativa a captura nativa
             if (modoEscutaAtivo) {
-                iniciarCapturaMic();
+                
+                // Adicionamos um atraso de 500ms (meio segundo).
+                // Isso dá tempo para o hardware do Android desligar o alto-falante
+                // completamente antes de tentar ligar o microfone, evitando conflitos.
+                setTimeout(() => {
+                    iniciarCapturaMic();
+                }, 500);
+                
             }
         }
 
