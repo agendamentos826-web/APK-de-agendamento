@@ -1467,7 +1467,8 @@
             }
 
             // 4. Iniciar/Parar Assistente Contínuo
-            function alternarEscutaVoz() {
+            // Transformamos a função em async para poder esperar a permissão do usuário
+            async function alternarEscutaVoz() {
                 if (modoEscutaAtivo) {
                     // Desliga completamente
                     modoEscutaAtivo = false;
@@ -1478,6 +1479,22 @@
                     resetarDados();
                     atualizarIndicador("🎙️ Toque para ativar. Depois chame pelo 'Ney'", "pronto");
                 } else {
+                    // === CORREÇÃO: PEDIR PERMISSÃO NATIVA NO ANDROID ===
+                    const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
+                    
+                    if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
+                        try {
+                            // Pede para o Android abrir a caixinha de permissão
+                            const status = await window.Capacitor.Plugins.SpeechRecognition.checkPermissions();
+                            if (status.speechRecognition !== 'granted') {
+                                await window.Capacitor.Plugins.SpeechRecognition.requestPermissions();
+                            }
+                        } catch (erroPermissao) {
+                            console.warn("Erro ao solicitar permissão nativa do Android:", erroPermissao);
+                        }
+                    }
+                    // ====================================================
+
                     // Liga a escuta contínua esperando pelo "Ney"
                     modoEscutaAtivo = true;
                     microfonePausadoPeloSistema = false;
