@@ -958,10 +958,15 @@
             if (houveRolagem) {
                 return false;
             }
-        
-            // PROTEÇÃO 2: Se foi uma pressão longa, cancela o clique fantasma!
+
+            // NOVO: Previne o clique fantasma (duplo evento) no mobile
+            if (e && e.cancelable && e.type === 'touchend') {
+                e.preventDefault();
+            }
+
+            // PROTEÇÃO 2: Se foi uma pressão longa, cancela a abertura da janela!
             if (foiPressaoLonga) {
-                if (e && e.cancelable) {
+                if (e && e.cancelable && e.type !== 'touchend') { // Se já prevenimos acima, não precisa de novo
                     e.preventDefault();
                     e.stopPropagation();
                 }
@@ -972,7 +977,6 @@
             gerenciarCliqueSlot(hora, barbeiro, status, nomeCliente);
         }
 
-        
         // Função que chama o Backend para bloquear apenas este horário
         function fecharHorarioEspecifico(hora, barbeiro) {
             const data = document.getElementById('dataSelecionada').value;
@@ -1463,61 +1467,74 @@
             
             const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
 
+            // Calcula um tempo aproximado baseado no tamanho do texto (fallback seguro)
+            let tempoCalculado = Math.max(1500, texto.length * 80);
+
             if (isNativo) {
-                // 1. Para o microfone primeiro
+                // --- FLUXO MOBILE NATIVO ---
                 if (window.Capacitor.Plugins.SpeechRecognition) {
                     try { await window.Capacitor.Plugins.SpeechRecognition.stop(); } catch(e){}
                 }
                 
-                // 2. Pequeno respiro (150ms) para o Android liberar o áudio
                 await new Promise(r => setTimeout(r, 150));
-
                 let falouComSucesso = false;
 
-                // 3. Fala usando o plugin nativo simples (sem pitch para não quebrar no Moto G34)
                 if (window.Capacitor.Plugins.TextToSpeech) {
                     try {
                         await window.Capacitor.Plugins.TextToSpeech.speak({
-                            text: texto,
-                            lang: 'pt-BR',
-                            rate: 1.0
+                            text: texto, lang: 'pt-BR', rate: 1.0
                         });
                         falouComSucesso = true;
-                    } catch(e) {
-                        console.error("Erro no TextToSpeech nativo:", e);
-                    }
+                    } catch(e) { console.error("Erro TTS Nativo:", e); }
                 }
 
-                // Fallback de segurança: se o plugin falhar, tenta o motor web
                 if (!falouComSucesso && window.speechSynthesis) {
                     try {
                         window.speechSynthesis.cancel();
                         const msg = new SpeechSynthesisUtterance(texto);
                         msg.lang = 'pt-BR';
                         window.speechSynthesis.speak(msg);
-                        await new Promise(r => setTimeout(r, Math.max(1500, texto.length * 80)));
+                        await new Promise(r => setTimeout(r, tempoCalculado));
                     } catch(e){}
                 }
 
+                // Aguarda a liberação no nativo e reativa o mic
+                setTimeout(() => finalizarFala(callbackAoTerminar), 500);
+
             } else {
-                // Motor Web (PC)
+                // --- FLUXO WEB (COMPUTADOR/NAVEGADOR) ---
                 if (reconhecimentoWeb) { try { reconhecimentoWeb.stop(); } catch(e){} }
+                
                 if (window.speechSynthesis) {
                     window.speechSynthesis.cancel();
                     const mensagem = new SpeechSynthesisUtterance(texto);
                     mensagem.lang = 'pt-BR';
+                    
+                    // A MÁGICA: Só religa as coisas quando ele TERMINAR de falar!
+                    mensagem.onend = () => {
+                        setTimeout(() => finalizarFala(callbackAoTerminar), 300);
+                    };
+
                     window.speechSynthesis.speak(mensagem);
+
+                    // Fallback: Se o navegador bugar e não disparar o 'onend', usamos o tempo calculado + margem
+                    setTimeout(() => finalizarFala(callbackAoTerminar), tempoCalculado + 1000);
+                } else {
+                    // Se não tiver suporte de voz no navegador, continua o fluxo normal
+                    finalizarFala(callbackAoTerminar);
                 }
             }
+        }
 
-            // 4. Espera o som terminar e religa o microfone suavemente
-            setTimeout(() => {
-                microfonePausadoPeloSistema = false; // Libera o microfone
-                if (modoEscutaAtivo) {
-                    if (callbackAoTerminar) callbackAoTerminar();
-                    else iniciarCapturaMic();
-                }
-            }, 500); 
+        // Função auxiliar pra organizar e evitar que rode duas vezes
+        function finalizarFala(callback) {
+            if (!microfonePausadoPeloSistema) return; // Evita loop duplo se o fallback e o onend rodarem
+            microfonePausadoPeloSistema = false; 
+            
+            if (modoEscutaAtivo) {
+                if (callback) callback();
+                else iniciarCapturaMic();
+            }
         }
 
         function atualizarIndicador(texto, estado) {
@@ -1687,7 +1704,7 @@
                     modoEscutaAtivo = false;
                     microfonePausadoPeloSistema = false;
                     resetarDados();
-                    atualizarIndicador("🎙️ Toque para ativar o Assistente", "pronto");
+                    atualizarIndicador("🎙️ Toque para ativar o Comando", "pronto");
                     
                     const isNativo = window.Capacitor && window.Capacitor.isNativePlatform();
                     if (isNativo && window.Capacitor.Plugins.SpeechRecognition) {
