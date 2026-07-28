@@ -13,8 +13,8 @@
         <item name="android:windowTranslucentNavigation">false</item>
 
         <!-- Cores das barras superior e inferior -->
-        <item name="android:statusBarColor">#485460</item>
-        <item name="android:navigationBarColor">#485460</item>
+        <item name="android:statusBarColor">#ff0000</item>
+        <item name="android:navigationBarColor">#ff0000</item>
     </style>
 
     <!-- 2. Tema Principal sem Barra de Título (Usado pelo Capacitor) -->
