@@ -7,17 +7,23 @@
         <item name="colorPrimaryDark">#485460</item>
         <item name="colorAccent">@color/colorAccent</item>
 
-        <!-- Define a cor nativa da barra superior (Status) e inferior (Navegação) -->
+        <!-- CHAVE DA SOLUÇÃO: Autoriza o Android a pintar as barras do sistema -->
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:windowTranslucentStatus">false</item>
+        <item name="android:windowTranslucentNavigation">false</item>
+
+        <!-- Cores das barras superior e inferior -->
         <item name="android:statusBarColor">#485460</item>
         <item name="android:navigationBarColor">#485460</item>
     </style>
 
-    <!-- 2. Tema Principal sem Barra de Título (Capacitor) -->
+    <!-- 2. Tema Principal sem Barra de Título (Usado pelo Capacitor) -->
     <style name="AppTheme.NoActionBar" parent="AppTheme">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
 
-        <!-- Mantém o topo e a base pintados no tema sem ActionBar -->
+        <!-- Reforça a permissão de pintura e cores -->
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <item name="android:statusBarColor">#485460</item>
         <item name="android:navigationBarColor">#485460</item>
     </style>
@@ -25,6 +31,7 @@
     <!-- 3. Tema da Tela de Abertura (Splash Screen) -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <item name="android:statusBarColor">#485460</item>
         <item name="android:navigationBarColor">#485460</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>

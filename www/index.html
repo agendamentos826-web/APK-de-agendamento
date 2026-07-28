@@ -1964,19 +1964,17 @@
         });
 
         document.addEventListener('DOMContentLoaded', () => {
-            // 1. Tabela de cores e estilos de ícones para cada tema
             const CONFIG_TEMAS = {
                 dark: {
-                    corFundo: '#122332',     // Cor da barra no tema escuro
-                    estiloIcones: 'LIGHT'    // Ícones BRANCOS para fundo escuro
+                    corFundo: '#122332',
+                    estiloIcones: 'DARK'
                 },
                 light: {
-                    corFundo: '#485460',     // Cor da barra no tema claro
-                    estiloIcones: 'LIGHT'    // Ícones BRANCOS para fundo #485460
+                    corFundo: '#485460',
+                    estiloIcones: 'DARK'
                 }
             };
 
-            // 2. Função que comunica diretamente com a StatusBar nativa do Android
             async function atualizarStatusBar(nomeTema) {
                 const config = (nomeTema === 'dark') ? CONFIG_TEMAS.dark : CONFIG_TEMAS.light;
 
@@ -1984,10 +1982,15 @@
                     try {
                         const { StatusBar } = window.Capacitor.Plugins;
 
-                        // Altera a cor de fundo da StatusBar nativa
+                        // Desativa a sobreposição transparente para permitir coloração direta
+                        if (StatusBar.setOverlaysWebView) {
+                            await StatusBar.setOverlaysWebView({ overlay: false });
+                        }
+
+                        // Altera a cor da StatusBar
                         await StatusBar.setBackgroundColor({ color: config.corFundo });
 
-                        // Define o estilo dos ícones como claros/brancos ('LIGHT') para dar contraste
+                        // Ajusta o estilo dos ícones
                         await StatusBar.setStyle({ style: config.estiloIcones });
                     } catch (erro) {
                         console.log('Erro ao atualizar StatusBar nativa:', erro);
@@ -1997,11 +2000,11 @@
 
             const elementoHtml = document.documentElement;
 
-            // 3. Aplica a cor da StatusBar na inicialização da página
+            // Aplica a cor na inicialização
             const temaInicial = elementoHtml.getAttribute('data-theme') || 'light';
             atualizarStatusBar(temaInicial);
 
-            // 4. Observa alterações no atributo data-theme para trocar a cor dinamicamente
+            // Observa mudanças de tema
             const observador = new MutationObserver((mutacoes) => {
                 mutacoes.forEach((mutacao) => {
                     if (mutacao.type === 'attributes' && mutacao.attributeName === 'data-theme') {
