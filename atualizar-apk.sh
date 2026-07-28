@@ -1,50 +1,64 @@
 #!/bin/bash
 
 # ==============================================================================
-# SCRIPT DE ATUALIZAÇÃO DO APK E ENVIO PARA O GITHUB (COM JAVA 21)
+# SCRIPT DE ATUALIZAÇÃO DO APK E ENVIO AUTOMÁTICO PARA O GITHUB (COM JAVA)
 # ==============================================================================
 
-# Para a execução caso ocorra algum erro
+# Interruptor de segurança: para o script imediatamente se ocorrer qualquer erro
 set -e
 
-echo "🚀 Iniciando a atualização completa..."
+echo "🚀 Iniciando o processo completo de atualização..."
 
 # ------------------------------------------------------------------------------
-# 1. VERIFICAÇÃO / CONFIGURAÇÃO DO JAVA
+# 1. VERIFICAÇÃO / CONFIGURAÇÃO DO JAVA 21
 # ------------------------------------------------------------------------------
-# Caso queira forçar um caminho específico do Java 21, desconecte a linha abaixo:
+echo "☕ 1/6 Verificando a versão do Java..."
+
+# SE PRECISAR DEFINIR O CAMINHO DO JAVA 21 MANUALMENTE, DESCOMENTE A LINHA ABAIXO:
 # export JAVA_HOME="/caminho/para/o/seu/java-21"
 
 if [ -n "$JAVA_HOME" ]; then
-    echo "☕ Usando o Java localizado em: $JAVA_HOME"
+    echo "   📍 Usando JAVA_HOME definido em: $JAVA_HOME"
 else
-    echo "ℹ️  JAVA_HOME não definido explicitamente. Usando o Java padrão do sistema:"
+    echo "   📍 JAVA_HOME não definido explicitamente. Usando o Java padrão do sistema:"
     java -version
 fi
 
 # ------------------------------------------------------------------------------
 # 2. SINCRONIZAÇÃO E COMPILAÇÃO (CAPACITOR + GRADLE)
 # ------------------------------------------------------------------------------
-echo "📦 1/4 Sincronizando arquivos da Web (PWA) com o Android..."
+echo "📦 2/6 Sincronizando arquivos da Web (PWA) com o projeto Android..."
 npx cap copy android
 
-echo "🔨 2/4 Compilando o APK Android com Gradle..."
+echo "🔨 3/6 Compilando o novo APK nativo com o Gradle..."
 cd android
 ./gradlew assembleDebug
 cd ..
 
 # ------------------------------------------------------------------------------
-# 3. ATUALIZAÇÃO DO REPOSITÓRIO NO GITHUB
+# 3. ORGANIZAÇÃO DO ARQUIVO GERADO
 # ------------------------------------------------------------------------------
-echo "🔍 3/4 Identificando e salvando alterações no Git..."
+NOME_APK="app-barbearia.apk"
+
+echo "📋 4/6 Copiando o APK gerado para a raiz ($NOME_APK)..."
+cp android/app/build/outputs/apk/debug/app-debug.apk ./"$NOME_APK"
+
+# ------------------------------------------------------------------------------
+# 4. PREPARAÇÃO E ENVIO PARA O GITHUB
+# ------------------------------------------------------------------------------
+echo "🔍 5/6 Preparando os arquivos para o versionamento no Git..."
 git add .
 
-MENSAGEM_COMMIT="Atualização automática: $(date +'%d/%m/%Y às %H:%M')"
-git commit -m "$MENSAGEM_COMMIT" || echo "⚠️  Nenhuma alteração nova para salvar."
+# FORÇA a inclusão do APK no Git, superando limitações do .gitignore
+git add -f "$NOME_APK"
 
-echo "⬆️ 4/4 Enviando as atualizações para o GitHub..."
+# Define a mensagem do commit com a data e hora do seu sistema
+MENSAGEM_COMMIT="Atualização do APK: $(date +'%d/%m/%Y às %H:%M')"
+git commit -m "$MENSAGEM_COMMIT" || echo "ℹ️ Nenhuma alteração nova detectada."
+
+echo "⬆️ 6/6 Enviando as atualizações para o GitHub..."
 git push
 
 echo "=================================================="
-echo "✅ Processo concluído com sucesso!"
+echo "✅ Sucesso! O arquivo $NOME_APK foi gerado e atualizado no GitHub!"
 echo "=================================================="
