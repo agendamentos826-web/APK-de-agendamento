@@ -381,8 +381,6 @@
 </head>
 <body>
 
-    <div id="debug-log" style="position:fixed; bottom:0; left:0; right:0; max-height:35vh; overflow-y:auto; background:rgba(0,0,0,0.85); color:#0f0; font-size:11px; font-family:monospace; padding:6px; z-index:99999; white-space:pre-wrap;"></div>
-
     <div class="header-bg">
         <button class="theme-toggle" onclick="toggleTheme()">
             <span id="theme-icon">🌙</span>
@@ -1448,15 +1446,6 @@
             });
         }
 
-        function logDebug(msg) {
-            const el = document.getElementById('debug-log');
-            if (!el) return;
-            const linha = document.createElement('div');
-            linha.textContent = new Date().toLocaleTimeString() + ' | ' + msg;
-            el.appendChild(linha);
-            el.scrollTop = el.scrollHeight;
-        }
-
         function comTimeout(promise, ms, label) {
             let timer;
             const timeoutPromise = new Promise((_, reject) => {
@@ -1732,7 +1721,6 @@
                     // Regista o ouvinte de resultados parciais apenas uma vez
                     if (!ouvinteCapacitorAdicionado) {
                         window.Capacitor.Plugins.SpeechRecognition.addListener('partialResults', (data) => {
-                            logDebug('partialResults: ' + JSON.stringify(data));
                             if (data.matches && data.matches.length > 0 && data.matches[0]) {
                                 ultimoResultadoParcial = data.matches[0];
                                 // Se esse resultado chegou atrasado (depois da sessão já ter fechado),
@@ -1750,7 +1738,6 @@
 
                     if (!ouvinteListeningStateAdicionado) {
                         window.Capacitor.Plugins.SpeechRecognition.addListener('listeningState', (data) => {
-                            logDebug('listeningState: ' + JSON.stringify(data));
                             isListeningLock = false;
                             if (data.status === 'stopped') {
                                 sessaoAtualVoz++;
@@ -1772,7 +1759,6 @@
                     }
 
                     // Ativa a escuta nativa no Android
-                    logDebug('Chamando start()...');
                     await comTimeout(
                         window.Capacitor.Plugins.SpeechRecognition.start({
                             language: "pt-BR",
@@ -1810,11 +1796,9 @@
             } catch (erro) {
                 const msg = erro?.message || JSON.stringify(erro);
                 console.error("Erro ao iniciar captura de voz:", erro);
-                logDebug('ERRO start(): ' + msg);
                 isListeningLock = false;
                 if (msg && msg.includes('TIMEOUT_START') && modoEscutaAtivo) {
                     // O plugin travou sem responder. Força um stop() pra limpar o estado nativo e tenta de novo.
-                    logDebug('Timeout no start() — forçando stop() e tentando de novo...');
                     try { await window.Capacitor.Plugins.SpeechRecognition.stop(); } catch (e) {}
                     setTimeout(() => { if (modoEscutaAtivo) iniciarCapturaMic(); }, 500);
                 } else {
@@ -1849,7 +1833,6 @@
 
                 // 1. Verifica se a permissão já foi concedida anteriormente
                 let check = await window.Capacitor.Plugins.SpeechRecognition.checkPermissions();
-                logDebug('checkPermissions: ' + JSON.stringify(check));
                 if (estaConcedido(check)) {
                     return true;
                 }
@@ -1864,7 +1847,6 @@
 
                     window.Capacitor.Plugins.SpeechRecognition.requestPermissions()
                         .then((req) => {
-                            logDebug('requestPermissions: ' + JSON.stringify(req));
                             clearTimeout(timer);
                             // Se o utilizador aceitou ou se a resposta veio válida
                             resolve(estaConcedido(req) || true);
