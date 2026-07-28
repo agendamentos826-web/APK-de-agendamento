@@ -1,22 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <!-- Base application theme. -->
+    <!-- Tema base da aplicação com ActionBar -->
     <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
-        <!-- Customize your theme here. -->
+        <!-- Cores primárias do projeto -->
         <item name="colorPrimary">@color/colorPrimary</item>
-        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        
+        <!-- Define a StatusBar nativa com a cor #485460 no arranque -->
+        <item name="colorPrimaryDark">#485460</item>
+        <item name="android:statusBarColor">#485460</item>
+        
         <item name="colorAccent">@color/colorAccent</item>
+
+        <!-- Garante ícones claros (brancos) sobre o fundo #485460 -->
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 
+    <!-- Tema sem barra de ação padrão para a aplicação Web -->
     <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
     </style>
 
-
+    <!-- Tema utilizado durante o ecrã de arranque (Splash Screen) -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
     </style>
+
 </resources>
