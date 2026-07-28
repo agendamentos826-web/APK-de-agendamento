@@ -8,6 +8,9 @@
         <item name="android:statusBarColor">#485460</item>
         <item name="colorAccent">@color/colorAccent</item>
         <item name="android:windowLightStatusBar">false</item>
+        
+        <!-- NOVA LINHA: Pinta a barra de navegação inferior (Navigation Bar) -->
+        <item name="android:navigationBarColor">#485460</item>
     </style>
 
     <!-- 2. Tema Principal da Aplicação sem Barra de Título -->
@@ -20,6 +23,9 @@
         <item name="colorPrimaryDark">#485460</item>
         <item name="android:statusBarColor">#485460</item>
         <item name="android:windowLightStatusBar">false</item>
+        
+        <!-- NOVA LINHA: Mantém a barra inferior pintada no tema principal -->
+        <item name="android:navigationBarColor">#485460</item>
     </style>
 
     <!-- 3. Tema do Ecrã de Entrada (Splash Screen / Arranque) -->
@@ -30,6 +36,9 @@
         <!-- Força a barra de estado a ser #485460 desde o primeiro segundo -->
         <item name="android:statusBarColor">#485460</item>
         <item name="android:windowLightStatusBar">false</item>
+        
+        <!-- NOVA LINHA: Garante que não pisca a branco no arranque -->
+        <item name="android:navigationBarColor">#485460</item>
         
         <!-- Transição suave para o tema principal assim que a app carrega -->
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
