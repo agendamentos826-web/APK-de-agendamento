@@ -10,6 +10,10 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
+
+// Importação fundamental para o Edge-to-Edge funcionar
+import androidx.core.view.WindowCompat; 
+
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
@@ -20,21 +24,24 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // 1. Liberta o layout para ocupar a tela inteira (desativa as margens brancas do sistema)
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+
         super.onCreate(savedInstanceState);
 
-        // 1. Força a cor #485460 diretamente na janela nativa do Android
+        // 2. Configura a barra nativa para deixar o fundo do seu HTML aparecer
         configurarStatusBarNativa();
 
-        // 2. Solicita a permissão nativa de microfone ao sistema Android
+        // 3. Solicita a permissão nativa de microfone ao sistema Android
         solicitarPermissaoMicrofoneNativa();
 
-        // 3. Autoriza a WebView do Capacitor a repassar o áudio para o JavaScript
+        // 4. Autoriza a WebView do Capacitor a repassar o áudio para o JavaScript
         configurarWebViewParaMicrofone();
     }
 
     /**
-     * Define a cor da barra de estado nativa como #485460
-     * e ajusta o contraste dos ícones (relojó, bateria, Wi-Fi).
+     * Define a cor da barra de estado nativa como TRANSPARENTE 
+     * e ajusta o contraste dos ícones (relógio, bateria, Wi-Fi) para ficarem brancos.
      */
     private void configurarStatusBarNativa() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -42,8 +49,11 @@ public class MainActivity extends BridgeActivity {
             window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
             window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
             
-            // Define explicitamente a cor #485460 na barra superior
-            window.setStatusBarColor(Color.parseColor("#485460"));
+            // Define a barra superior como transparente para o cabeçalho HTML subir até o topo
+            window.setStatusBarColor(Color.TRANSPARENT);
+            
+            // Recomendo deixar a barra de baixo (navegação) transparente também para uniformizar
+            window.setNavigationBarColor(Color.TRANSPARENT);
 
             // Ajusta o estilo dos ícones para ficarem brancos
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
