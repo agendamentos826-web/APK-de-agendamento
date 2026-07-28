@@ -12,7 +12,7 @@ echo "🚀 1/7 Verificando o ambiente..."
 # Ajuste do Java 21 (descomente a linha abaixo se necessário)
 # export JAVA_HOME="/caminho/para/o/seu/java-21"
 
-echo "⚙️ 2/7 Blindando e gravando o capacitor.config.json com tom claro (#485460)..."
+echo "⚙️ 2/7 Blindando e gravando o capacitor.config.json com tom escuro (#485460)..."
 
 # Escreve diretamente o arquivo de configuração com as cores corretas
 cat << 'EOF' > capacitor.config.json
@@ -42,7 +42,8 @@ EOF
 
 echo "   ✅ Configuração atualizada com sucesso na raiz!"
 
-echo "📦 3/7 Sincronizando arquivos Web e Configurações com o Android..."
+echo "🔄 3/7 Sincronizando arquivos Web e Configurações com o Android..."
+# Como editamos direto na pasta www, apenas sincronizamos com o Android nativo
 npx cap sync android
 
 echo "🧹 4/7 Limpando compilações antigas e gerando novo APK..."
@@ -67,7 +68,7 @@ echo "🔍 6/7 Preparando alterações para o Git..."
 git add .
 git add -f "$DESTINO_APK"
 
-MENSAGEM="Atualização de tema e APK ($DESTINO_APK) em: $(date +'%d/%m/%Y às %H:%M')"
+MENSAGEM="Atualização de tema, Edge-to-Edge e APK ($DESTINO_APK) em: $(date +'%d/%m/%Y às %H:%M')"
 git commit -m "$MENSAGEM" || echo "ℹ️ Nenhuma alteração pendente para salvar."
 
 echo "⬆️ 7/7 Enviando atualizações para o GitHub..."
