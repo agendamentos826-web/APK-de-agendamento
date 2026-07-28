@@ -11,6 +11,7 @@
 
     
     <title>Agendamento Interno Barbearia Lucas Borges</title>
+    <script src="capacitor.js"></script>
     
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#485460">
@@ -1964,89 +1965,77 @@
         });
 
         document.addEventListener('DOMContentLoaded', () => {
-
-            // ==========================================
-            // 1. CONFIGURAÇÃO DOS TEMAS
-            // ==========================================
-            // 'LIGHT' = Ícones e textos BRANCOS na barra (ideal para fundos escuros)
-            // 'DARK'  = Ícones e textos PRETO/CINZA na barra (ideal para fundos claros)
+            
+            // 1. Definição das cores e ícones de cada tema
             const CONFIG_TEMAS = {
                 dark: {
-                    corFundo: '#122332',      // Cor do tema escuro
-                    estiloIcones: 'DARK'     // Ícones brancos no topo
+                    corFundo: '#122332',
+                    estiloIcones: 'DARK' // Ícones brancos no topo
                 },
                 light: {
-                    corFundo: '#485460',      // Cor do tema claro
-                    estiloIcones: 'DARK'     // Ícones brancos no topo
+                    corFundo: '#485460',
+                    estiloIcones: 'DARK' // Ícones brancos no topo
                 }
             };
 
-            // ==========================================
-            // 2. FUNÇÃO QUE APLICA AS CORES
-            // ==========================================
-            async function atualizarStatusBar(nomeTema) {
-                // Seleciona as configurações do tema escolhido (ou padrão 'light')
+            // 2. Função principal para aplicar as cores nas barras do Android e na Web
+            async function atualizarBarrasDoSistema(nomeTema) {
                 const config = (nomeTema === 'dark') ? CONFIG_TEMAS.dark : CONFIG_TEMAS.light;
 
                 console.log(`🎨 [TEMA] Aplicando tema: ${nomeTema} com a cor: ${config.corFundo}`);
 
-                // A) Aplicação no Navegador Web (Útil para testes no Codespaces)
+                // A) Aplica no CSS do Navegador / Webview
                 document.documentElement.style.setProperty('--bg-body', config.corFundo);
                 document.body.style.backgroundColor = config.corFundo;
 
-                // B) Aplicação no Aplicativo Android Nativo (Capacitor)
-                if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.StatusBar) {
-                    try {
-                        const { StatusBar } = window.Capacitor.Plugins;
+                // B) Verifica se o Capacitor nativo está disponível
+                if (window.Capacitor && window.Capacitor.isNativePlatform()) {
+                    const plugins = window.Capacitor.Plugins;
 
-                        // Desativa a sobreposição para permitir pintar o fundo da barra sem cobrir o app
-                        if (StatusBar.setOverlaysWebView) {
-                            await StatusBar.setOverlaysWebView({ overlay: false });
+                    // Controle via Plugin StatusBar
+                    if (plugins.StatusBar) {
+                        try {
+                            await plugins.StatusBar.setOverlaysWebView({ overlay: false });
+                            await plugins.StatusBar.setBackgroundColor({ color: config.corFundo });
+                            await plugins.StatusBar.setStyle({ style: config.estiloIcones });
+                            console.log('✅ [NATIVO] StatusBar atualizada!');
+                        } catch (e) {
+                            console.error('❌ [NATIVO] Erro na StatusBar:', e);
                         }
+                    }
 
-                        // Define a cor de fundo nativa da StatusBar
-                        await StatusBar.setBackgroundColor({ color: config.corFundo });
-
-                        // Define a cor dos ícones (hora, bateria, etc.)
-                        await StatusBar.setStyle({ style: config.estiloIcones });
-
-                        console.log('✅ [NATIVO] StatusBar atualizada no dispositivo!');
-                    } catch (erro) {
-                        console.error('❌ [NATIVO] Erro ao atualizar a StatusBar:', erro);
+                    // Controle via Plugin EdgeToEdge (Se estiver ativo no projeto)
+                    if (plugins.EdgeToEdge) {
+                        try {
+                            await plugins.EdgeToEdge.setBackgroundColor({ color: config.corFundo });
+                            console.log('✅ [NATIVO] EdgeToEdge atualizado!');
+                        } catch (e) {
+                            console.error('❌ [NATIVO] Erro no EdgeToEdge:', e);
+                        }
                     }
                 } else {
                     console.log('🌐 [NAVEGADOR] Rodando em modo Web. Recursos nativos pausados.');
                 }
             }
 
-            // ==========================================
-            // 3. INICIALIZAÇÃO DO TEMA
-            // ==========================================
+            // 3. Execução Inicial
             const elementoHtml = document.documentElement;
-
-            // Detecta o tema inicial definido no atributo data-theme do <html>
             const temaInicial = elementoHtml.getAttribute('data-theme') || 'light';
-
-            // Aguarda 300ms para garantir a carga total dos plugins nativos do dispositivo
+            
             setTimeout(() => {
-                atualizarStatusBar(temaInicial);
+                atualizarBarrasDoSistema(temaInicial);
             }, 300);
 
-            // ==========================================
-            // 4. OBSERVADOR DE MUDANÇA DE TEMA
-            // ==========================================
-            // O MutationObserver monitora alterações em atributos da tag <html>
+            // 4. Observador que detecta quando o tema muda no HTML
             const observador = new MutationObserver((mutacoes) => {
                 mutacoes.forEach((mutacao) => {
-                    // Verifica se o atributo modificado foi especificamente 'data-theme'
                     if (mutacao.type === 'attributes' && mutacao.attributeName === 'data-theme') {
                         const novoTema = elementoHtml.getAttribute('data-theme') || 'light';
-                        atualizarStatusBar(novoTema);
+                        atualizarBarrasDoSistema(novoTema);
                     }
                 });
             });
 
-            // Inicia o monitoramento na tag <html>
             observador.observe(elementoHtml, {
                 attributes: true,
                 attributeFilter: ['data-theme']
