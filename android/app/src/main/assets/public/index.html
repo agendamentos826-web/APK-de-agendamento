@@ -2,7 +2,8 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Adicione o viewport-fit=cover no final do content -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <!-- Impede que o WebView do Android force a inversão de cores por conta própria -->
     <!-- Desativa a sobreposição do modo escuro nativo do Android sobre o seu CSS -->
     <meta name="color-scheme" content="light dark">
@@ -95,10 +96,17 @@
             transition: all 0.3s ease; 
         }
         
-        /* CABEÇALHO */
         .header-bg { 
             background: linear-gradient(135deg, var(--brand-blue) 0%, #2c3e50 100%);
-            padding: 40px 20px 60px 20px; 
+            
+            /* 1. O segredo da margem dinâmica para telas Edge-to-Edge no Android/iOS */
+            padding-top: calc(env(safe-area-inset-top) + 40px);
+            
+            /* 2. Mantemos as restantes margens iguais à sua versão original */
+            padding-right: 20px;
+            padding-bottom: 60px;
+            padding-left: 20px;
+            
             text-align: center; 
             border-radius: 0 0 30px 30px;
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
