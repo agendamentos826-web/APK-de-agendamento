@@ -8,6 +8,10 @@
 		"classpath": "com.capacitorjs.plugins.statusbar.StatusBarPlugin"
 	},
 	{
+		"pkg": "@capawesome/capacitor-android-edge-to-edge-support",
+		"classpath": "io.capawesome.capacitorjs.plugins.androidedgetoedgesupport.EdgeToEdgePlugin"
+	},
+	{
 		"pkg": "@capgo/capacitor-speech-recognition",
 		"classpath": "app.capgo.speechrecognition.SpeechRecognitionPlugin"
 	}

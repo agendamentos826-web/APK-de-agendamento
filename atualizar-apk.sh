@@ -32,6 +32,9 @@ cat << 'EOF' > capacitor.config.json
       "overlaysWebView": false,
       "style": "LIGHT",
       "backgroundColor": "#485460"
+    },
+    "SystemBars": {
+      "insetsHandling": "disable"
     }
   }
 }
