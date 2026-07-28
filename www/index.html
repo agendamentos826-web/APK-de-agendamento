@@ -1964,58 +1964,56 @@
         });
 
         document.addEventListener('DOMContentLoaded', () => {
-            // 1. Tabela de cores para cada tema (ajusta as cores em Hexadecimal se precisares)
+            // 1. Tabela de cores e estilos de ícones para cada tema
             const CONFIG_TEMAS = {
-            dark: {
-                corFundo: '#122332',     // Cor da barra no tema escuro
-                estiloIcones: 'DARK'      // Deixa os ícones (bateria, hora) BRANCOS
-            },
-            light: {
-                corFundo: '#485460',     // Cor da barra no tema claro
-                estiloIcones: 'DARK'     // Deixa os ícones (bateria, hora) ESCUROS/PRETOS
-            }
+                dark: {
+                    corFundo: '#122332',     // Cor da barra no tema escuro
+                    estiloIcones: 'DARK'    // Ícones BRANCOS para fundo escuro
+                },
+                light: {
+                    corFundo: '#485460',     // Cor da barra no tema claro
+                    estiloIcones: 'DARK'    // Ícones BRANCOS para fundo #485460
+                }
             };
 
-            // 2. Função que comunica diretamente com o Android através do Capacitor
+            // 2. Função que comunica diretamente com a StatusBar nativa do Android
             async function atualizarStatusBar(nomeTema) {
-            const config = (nomeTema === 'dark') ? CONFIG_TEMAS.dark : CONFIG_TEMAS.light;
+                const config = (nomeTema === 'dark') ? CONFIG_TEMAS.dark : CONFIG_TEMAS.light;
 
-            // Verifica se o aplicativo está a rodar dentro do APK (Capacitor)
-            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.StatusBar) {
-                try {
-                const { StatusBar } = window.Capacitor.Plugins;
+                if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.StatusBar) {
+                    try {
+                        const { StatusBar } = window.Capacitor.Plugins;
 
-                // Altera a cor de fundo da StatusBar nativa
-                await StatusBar.setBackgroundColor({ color: config.corFundo });
+                        // Altera a cor de fundo da StatusBar nativa
+                        await StatusBar.setBackgroundColor({ color: config.corFundo });
 
-                // Altera o estilo dos ícones nativos para dar contraste
-                await StatusBar.setStyle({ style: config.estiloIcones });
-                } catch (erro) {
-                console.log('Erro ao atualizar StatusBar nativa:', erro);
+                        // Define o estilo dos ícones como claros/brancos ('LIGHT') para dar contraste
+                        await StatusBar.setStyle({ style: config.estiloIcones });
+                    } catch (erro) {
+                        console.log('Erro ao atualizar StatusBar nativa:', erro);
+                    }
                 }
             }
-            }
 
-            const elementoHtml = document.documentElement; // Pega a tag <html>
+            const elementoHtml = document.documentElement;
 
-            // 3. Aplica a cor da StatusBar logo ao carregar a página
+            // 3. Aplica a cor da StatusBar na inicialização da página
             const temaInicial = elementoHtml.getAttribute('data-theme') || 'light';
             atualizarStatusBar(temaInicial);
 
-            // 4. Observa se o data-theme mudar enquanto o utilizador usa o app
+            // 4. Observa alterações no atributo data-theme para trocar a cor dinamicamente
             const observador = new MutationObserver((mutacoes) => {
-            mutacoes.forEach((mutacao) => {
-                if (mutacao.type === 'attributes' && mutacao.attributeName === 'data-theme') {
-                const novoTema = elementoHtml.getAttribute('data-theme') || 'light';
-                atualizarStatusBar(novoTema);
-                }
-            });
+                mutacoes.forEach((mutacao) => {
+                    if (mutacao.type === 'attributes' && mutacao.attributeName === 'data-theme') {
+                        const novoTema = elementoHtml.getAttribute('data-theme') || 'light';
+                        atualizarStatusBar(novoTema);
+                    }
+                });
             });
 
-            // Inicia a observação no <html>
             observador.observe(elementoHtml, {
-            attributes: true,
-            attributeFilter: ['data-theme']
+                attributes: true,
+                attributeFilter: ['data-theme']
             });
         });
 
