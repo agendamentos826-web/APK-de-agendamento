@@ -1006,12 +1006,13 @@
         function fecharHorarioEspecifico(hora, barbeiro) {
             const data = document.getElementById('dataSelecionada').value;
             
-            // Criamos o objeto 'dados' antes de enviar para o servidor
+            // Ajustado: Enviamos 'fechar_intervalo' com inicio e fim iguais ao horário selecionado
             const dados = { 
                 data: data, 
-                horario: hora, 
+                inicio: hora, 
+                fim: hora, 
                 barbeiro: barbeiro, 
-                acao: 'fechar_horario' 
+                acao: 'fechar_intervalo' 
             };
 
             abrirModalConfirmacao(
@@ -1157,7 +1158,8 @@
 
             // 1. REGRA DAS 8H
             if (status === 'regra_8h') {
-                const dados = { data: data, horario: hora, barbeiro: barbeiro, acao: 'liberar_8h' };
+                // Correção: alterado de 'liberar_8h' para 'liberar_horario_especifico'
+                const dados = { data: data, horario: hora, barbeiro: barbeiro, acao: 'liberar_horario_especifico' };
                 abrirModalConfirmacao(
                     "Liberar Horário?", 
                     `Deseja liberar o Lucas Borges para atender às ${hora} excepcionalmente?`, 
@@ -1250,7 +1252,8 @@
             
             // 5. FECHADO
             else if (status === 'fechado') {
-                const dados = { data: data, horario: hora, barbeiro: barbeiro, acao: 'liberar_horario' };
+                // Correção: alterado de 'liberar_horario' para 'liberar_horario_especifico'
+                const dados = { data: data, horario: hora, barbeiro: barbeiro, acao: 'liberar_horario_especifico' };
                 abrirModalConfirmacao(
                     "Liberar Horário?", 
                     `Tem certeza que quer liberar o horário das ${hora} (${barbeiro}) para agendamentos?`, 
