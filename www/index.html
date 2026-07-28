@@ -88,12 +88,22 @@
         [data-theme="dark"] .flatpickr-weekday { color: #ccc; }
         [data-theme="dark"] .flatpickr-day { color: #eee; }
     
-        body { 
+        /* Unifica HTML e BODY para cobrir 100% da tela, inclusive a área de safe-area do topo */
+        html, body { 
             background-color: var(--bg-body); 
             font-family: 'Poppins', sans-serif; 
             color: var(--text-primary); 
-            margin: 0; padding: 0; 
-            transition: all 0.3s ease; 
+            margin: 0; 
+            padding: 0; 
+            width: 100%;
+            min-height: 100vh;
+            transition: background-color 0.3s ease; 
+        }
+
+        /* Garante que o fundo da raiz acompanhe o tema escuro quando ativo */
+        [data-theme="dark"],
+        [data-theme="dark"] html {
+            background-color: #122332 !important;
         }
         
         .header-bg { 
