@@ -1964,49 +1964,81 @@
         });
 
         document.addEventListener('DOMContentLoaded', () => {
+
+            // ==========================================
+            // 1. CONFIGURAÇÃO DOS TEMAS
+            // ==========================================
+            // 'LIGHT' = Ícones e textos BRANCOS na barra (ideal para fundos escuros)
+            // 'DARK'  = Ícones e textos PRETO/CINZA na barra (ideal para fundos claros)
             const CONFIG_TEMAS = {
                 dark: {
-                    corFundo: '#122332',
-                    estiloIcones: 'DARK'
+                    corFundo: '#122332',      // Cor do tema escuro
+                    estiloIcones: 'DARK'     // Ícones brancos no topo
                 },
                 light: {
-                    corFundo: '#485460',
-                    estiloIcones: 'DARK'
+                    corFundo: '#485460',      // Cor do tema claro
+                    estiloIcones: 'DARK'     // Ícones brancos no topo
                 }
             };
 
+            // ==========================================
+            // 2. FUNÇÃO QUE APLICA AS CORES
+            // ==========================================
             async function atualizarStatusBar(nomeTema) {
+                // Seleciona as configurações do tema escolhido (ou padrão 'light')
                 const config = (nomeTema === 'dark') ? CONFIG_TEMAS.dark : CONFIG_TEMAS.light;
 
+                console.log(`🎨 [TEMA] Aplicando tema: ${nomeTema} com a cor: ${config.corFundo}`);
+
+                // A) Aplicação no Navegador Web (Útil para testes no Codespaces)
+                document.documentElement.style.setProperty('--bg-body', config.corFundo);
+                document.body.style.backgroundColor = config.corFundo;
+
+                // B) Aplicação no Aplicativo Android Nativo (Capacitor)
                 if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.StatusBar) {
                     try {
                         const { StatusBar } = window.Capacitor.Plugins;
 
-                        // Desativa a sobreposição transparente para permitir coloração direta
+                        // Desativa a sobreposição para permitir pintar o fundo da barra sem cobrir o app
                         if (StatusBar.setOverlaysWebView) {
                             await StatusBar.setOverlaysWebView({ overlay: false });
                         }
 
-                        // Altera a cor da StatusBar
+                        // Define a cor de fundo nativa da StatusBar
                         await StatusBar.setBackgroundColor({ color: config.corFundo });
 
-                        // Ajusta o estilo dos ícones
+                        // Define a cor dos ícones (hora, bateria, etc.)
                         await StatusBar.setStyle({ style: config.estiloIcones });
+
+                        console.log('✅ [NATIVO] StatusBar atualizada no dispositivo!');
                     } catch (erro) {
-                        console.log('Erro ao atualizar StatusBar nativa:', erro);
+                        console.error('❌ [NATIVO] Erro ao atualizar a StatusBar:', erro);
                     }
+                } else {
+                    console.log('🌐 [NAVEGADOR] Rodando em modo Web. Recursos nativos pausados.');
                 }
             }
 
+            // ==========================================
+            // 3. INICIALIZAÇÃO DO TEMA
+            // ==========================================
             const elementoHtml = document.documentElement;
 
-            // Aplica a cor na inicialização
+            // Detecta o tema inicial definido no atributo data-theme do <html>
             const temaInicial = elementoHtml.getAttribute('data-theme') || 'light';
-            atualizarStatusBar(temaInicial);
 
-            // Observa mudanças de tema
+            // Aguarda 300ms para garantir a carga total dos plugins nativos do dispositivo
+            setTimeout(() => {
+                atualizarStatusBar(temaInicial);
+            }, 300);
+
+            // ==========================================
+            // 4. OBSERVADOR DE MUDANÇA DE TEMA
+            // ==========================================
+            // O MutationObserver monitora alterações em atributos da tag <html>
             const observador = new MutationObserver((mutacoes) => {
                 mutacoes.forEach((mutacao) => {
+                    // Verifica se o atributo modificado foi especificamente 'data-theme'
                     if (mutacao.type === 'attributes' && mutacao.attributeName === 'data-theme') {
                         const novoTema = elementoHtml.getAttribute('data-theme') || 'light';
                         atualizarStatusBar(novoTema);
@@ -2014,6 +2046,7 @@
                 });
             });
 
+            // Inicia o monitoramento na tag <html>
             observador.observe(elementoHtml, {
                 attributes: true,
                 attributeFilter: ['data-theme']
