@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Define o Java 21 automaticamente para evitar erros de versão do Gradle
+export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+
 echo "Passo 1: A sincronizar o código para o Android..."
 npx cap sync android
 
