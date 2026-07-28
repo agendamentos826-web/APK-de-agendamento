@@ -1158,8 +1158,8 @@
 
             // 1. REGRA DAS 8H
             if (status === 'regra_8h') {
-                // Correção: alterado de 'liberar_8h' para 'liberar_horario_especifico'
-                const dados = { data: data, horario: hora, barbeiro: barbeiro, acao: 'liberar_horario_especifico' };
+                // CORREÇÃO: Mudámos "horario: hora" para "inicio: hora"
+                const dados = { data: data, inicio: hora, barbeiro: barbeiro, acao: 'liberar_horario_especifico' };
                 abrirModalConfirmacao(
                     "Liberar Horário?", 
                     `Deseja liberar o Lucas Borges para atender às ${hora} excepcionalmente?`, 
@@ -1174,7 +1174,7 @@
                         .then(d => {
                             if(d.status === 'sucesso' || d.sucesso) {
                                 mostrarMensagem("Horário liberado!", "sucesso");
-                                buscarOcupados(); 
+                                setTimeout(() => buscarOcupados(), 300); 
                             } else {
                                 mostrarMensagem("Erro ao liberar", "erro");
                             }
@@ -1186,7 +1186,8 @@
             
             // 2. ALMOÇO PADRÃO
             else if (status === 'lunch') {
-                const dados = { data: data, horario: hora, barbeiro: barbeiro, acao: 'liberar_almoco' };
+                // CORREÇÃO: Mudámos "horario: hora" para "inicio: hora"
+                const dados = { data: data, inicio: hora, barbeiro: barbeiro, acao: 'liberar_almoco' };
                 abrirModalConfirmacao(
                     "Liberar Almoço?", 
                     `Deseja tornar o horário das ${hora} (${barbeiro}) disponível para clientes agendarem?`, 
@@ -1201,7 +1202,7 @@
                         .then(d => {
                             if(d.status === 'sucesso' || d.sucesso) {
                                 mostrarMensagem("Horário liberado com sucesso!", "sucesso");
-                                buscarOcupados(); 
+                                setTimeout(() => buscarOcupados(), 300); 
                             } else {
                                 mostrarMensagem("Erro ao liberar: " + d.mensagem, "erro");
                             }
@@ -1252,8 +1253,9 @@
             
             // 5. FECHADO
             else if (status === 'fechado') {
-                // Correção: alterado de 'liberar_horario' para 'liberar_horario_especifico'
-                const dados = { data: data, horario: hora, barbeiro: barbeiro, acao: 'liberar_horario_especifico' };
+                // CORREÇÃO: Mudámos "horario: hora" para "inicio: hora"
+                const dados = { data: data, inicio: hora, barbeiro: barbeiro, acao: 'liberar_horario_especifico' };
+                
                 abrirModalConfirmacao(
                     "Liberar Horário?", 
                     `Tem certeza que quer liberar o horário das ${hora} (${barbeiro}) para agendamentos?`, 
@@ -1268,7 +1270,7 @@
                         .then(d => {
                             if(d.status === 'sucesso' || d.sucesso) {
                                 mostrarMensagem("Horário liberado com sucesso!", "sucesso");
-                                buscarOcupados(); 
+                                setTimeout(() => buscarOcupados(), 300);
                             } else {
                                 mostrarMensagem("Erro ao liberar: " + d.mensagem, "erro");
                             }
