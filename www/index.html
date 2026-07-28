@@ -90,6 +90,10 @@
         [data-theme="dark"] .flatpickr-day { color: #eee; }
     
         /* Unifica HTML e BODY para cobrir 100% da tela, inclusive a área de safe-area do topo */
+        html {
+            height: -webkit-fill-available;
+        }
+
         html, body { 
             background-color: var(--bg-body); 
             font-family: 'Poppins', sans-serif; 
@@ -97,14 +101,16 @@
             margin: 0; 
             padding: 0; 
             width: 100%;
+            
+            /* Altura mínima padrão para navegadores de computador */
             min-height: 100vh;
+            /* Altura ajustada dinamicamente para telas de celular (ignora as barras do sistema) */
+            min-height: -webkit-fill-available;
+            
+            /* A MÁGICA: Empurra o fundo para dentro da área segura da barra de navegação inferior */
+            padding-bottom: env(safe-area-inset-bottom);
+            
             transition: background-color 0.3s ease; 
-        }
-
-        /* Garante que o fundo da raiz acompanhe o tema escuro quando ativo */
-        [data-theme="dark"],
-        [data-theme="dark"] html {
-            background-color: #122332 !important;
         }
         
         .header-bg { 
